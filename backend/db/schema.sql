@@ -1,5 +1,5 @@
 -- =====================================================
--- LearnGraph AI
+-- Lexis AI
 -- schema.sql — COMPLETE PRODUCTION SCHEMA
 -- PostgreSQL 16+
 --
