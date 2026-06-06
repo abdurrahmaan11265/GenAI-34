@@ -17,7 +17,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-from app.api import auth, users
+from app.api import auth, users, books
 
 @app.get("/health")
 async def health_check():
@@ -25,3 +25,4 @@ async def health_check():
 
 app.include_router(auth.router, prefix=settings.API_V1_STR)
 app.include_router(users.router, prefix=settings.API_V1_STR)
+app.include_router(books.router, prefix=settings.API_V1_STR)
