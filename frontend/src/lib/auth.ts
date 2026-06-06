@@ -39,7 +39,7 @@ export const authOptions: NextAuthOptions = {
             name: data.user.name,
             image: data.user.avatarUrl ?? null,
             // Custom field — forwarded through JWT → session
-            accessToken: data.access_token,
+            accessToken: (data as any).token || data.access_token,
           };
         } catch (err) {
           // Returning null causes NextAuth to show "CredentialsSignin" error

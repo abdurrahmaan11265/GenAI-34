@@ -51,9 +51,12 @@ async function request<T>(
   });
 
   if (!res.ok) {
-    let errorBody: unknown;
+    let errorBody: any;
     try {
       errorBody = await res.json();
+      if (errorBody && Array.isArray(errorBody.detail)) {
+        errorBody.detail = errorBody.detail.map((e: any) => e.msg || JSON.stringify(e)).join(", ");
+      }
     } catch {
       errorBody = await res.text();
     }
@@ -125,9 +128,12 @@ export async function apiUpload<T>(
   });
 
   if (!res.ok) {
-    let errorBody: unknown;
+    let errorBody: any;
     try {
       errorBody = await res.json();
+      if (errorBody && Array.isArray(errorBody.detail)) {
+        errorBody.detail = errorBody.detail.map((e: any) => e.msg || JSON.stringify(e)).join(", ");
+      }
     } catch {
       errorBody = await res.text();
     }

@@ -32,10 +32,15 @@ export async function POST(req: NextRequest) {
     const data = await res.json();
 
     if (!res.ok) {
-      return NextResponse.json(
-        { error: data.detail ?? data.error ?? "Registration failed" },
-        { status: res.status }
-      );
+      let errorMsg = data.error ?? "Registration failed";
+      if (data.detail) {
+        if (Array.isArray(data.detail)) {
+          errorMsg = data.detail.map((e: any) => e.msg).join(", ");
+        } else if (typeof data.detail === "string") {
+          errorMsg = data.detail;
+        }
+      }
+      return NextResponse.json({ error: errorMsg }, { status: res.status });
     }
 
     // Return the user so the client can immediately call signIn

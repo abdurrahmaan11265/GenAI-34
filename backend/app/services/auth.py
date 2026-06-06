@@ -49,6 +49,6 @@ class AuthService:
         token = create_access_token(subject=user.id)
         
         return AuthResponse(
-            user={"id": str(user.id), "name": user.name, "email": user.email},
+            user={"id": str(user.id), "name": user.full_name, "email": user.email},
             token=token
         )

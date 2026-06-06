@@ -14,9 +14,11 @@ class Settings(BaseSettings):
     
     @property
     def ASYNC_DATABASE_URL(self) -> str:
-        if self.DATABASE_URL.startswith("postgresql://"):
-            return self.DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
-        return self.DATABASE_URL
+        url = self.DATABASE_URL
+        if url.startswith("postgresql://"):
+            url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
+        url = url.replace("sslmode=require", "ssl=require")
+        return url
     
     # Neo4j
     NEO4J_URI: str = "bolt://localhost:7687"

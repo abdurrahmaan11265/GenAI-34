@@ -1,6 +1,6 @@
 import uuid
 from sqlalchemy import Column, String, Integer, ForeignKey, DateTime, func, Text
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID, ENUM
 from sqlalchemy.orm import relationship
 from app.models.base import Base
 
@@ -26,7 +26,7 @@ class GraphBuildJob(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     book_id = Column(UUID(as_uuid=True), ForeignKey("books.id", ondelete="CASCADE"), nullable=False)
     graph_version = Column(Integer, nullable=False)
-    status = Column(String, nullable=False, default='QUEUED') # Enum: QUEUED, PROCESSING, COMPLETED, FAILED
+    status = Column(ENUM('QUEUED', 'PROCESSING', 'COMPLETED', 'FAILED', name='graph_build_status', create_type=False), nullable=False, default='QUEUED')
     started_at = Column(DateTime(timezone=True))
     completed_at = Column(DateTime(timezone=True))
     nodes_created = Column(Integer)
