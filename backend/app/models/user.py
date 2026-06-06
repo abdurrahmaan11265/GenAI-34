@@ -1,5 +1,5 @@
 import uuid
-from sqlalchemy import Column, String, Integer, ForeignKey, DateTime, Boolean, func
+from sqlalchemy import Column, String, Integer, ForeignKey, DateTime, Boolean, func, Date
 from sqlalchemy.dialects.postgresql import UUID, ENUM
 from sqlalchemy.orm import relationship
 from app.models.base import Base
@@ -16,21 +16,12 @@ class User(Base):
     last_login_at = Column(DateTime(timezone=True))
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
-
-    profile = relationship("LearnerProfile", back_populates="user", uselist=False, cascade="all, delete-orphan")
-
-
-class LearnerProfile(Base):
-    __tablename__ = "learner_profiles"
-
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False)
-    confidence_level = Column(Integer)
-    experience_level = Column(ENUM('BEGINNER', 'INTERMEDIATE', 'ADVANCED', name='experience_level', create_type=False))
-    preferred_examples = Column(String(100))
-    learning_velocity = Column(String(20))
-    preferred_study_minutes = Column(Integer)
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
-
-    user = relationship("User", back_populates="profile")
+    avatar_url = Column(String(500), nullable=True)
+    daily_new_node_cap = Column(Integer, nullable=False, default=10)
+    daily_reminder_time = Column(String(5), nullable=True)
+    session_length_pref = Column(Integer, nullable=False, default=30)
+    notify_reminders = Column(Boolean, nullable=False, default=True)
+    notify_due_reviews = Column(Boolean, nullable=False, default=True)
+    notify_processing = Column(Boolean, nullable=False, default=True)
+    global_streak = Column(Integer, nullable=False, default=0)
+    last_active_date = Column(Date, nullable=True)

@@ -1,6 +1,6 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from app.models.user import User, LearnerProfile
+from app.models.user import User
 
 class UserRepository:
     def __init__(self, session: AsyncSession):
@@ -19,7 +19,4 @@ class UserRepository:
         await self.session.flush()
         return user
 
-    async def create_profile(self, profile: LearnerProfile) -> LearnerProfile:
-        self.session.add(profile)
-        await self.session.flush()
-        return profile
+

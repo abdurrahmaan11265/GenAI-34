@@ -1,7 +1,7 @@
 from fastapi import HTTPException, status
 from app.schemas.user import UserCreate, UserLogin, AuthResponse
 from app.repositories.user_repo import UserRepository
-from app.models.user import User, LearnerProfile
+from app.models.user import User
 from app.core.security import get_password_hash, verify_password, create_access_token
 
 class AuthService:
@@ -26,10 +26,6 @@ class AuthService:
         )
         
         user = await self.user_repo.create_user(new_user)
-        
-        # Initialize default learner profile
-        profile = LearnerProfile(user_id=user.id)
-        await self.user_repo.create_profile(profile)
         
         token = create_access_token(subject=user.id)
         

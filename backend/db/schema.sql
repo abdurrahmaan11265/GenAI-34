@@ -653,6 +653,8 @@ CREATE TABLE graph_build_jobs (
 
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
     CONSTRAINT chk_graph_version_positive CHECK (graph_version > 0),
     CONSTRAINT chk_nodes_created    CHECK (nodes_created    IS NULL OR nodes_created >= 0),
     CONSTRAINT chk_edges_created    CHECK (edges_created    IS NULL OR edges_created >= 0),
@@ -667,6 +669,10 @@ CREATE INDEX idx_graph_build_jobs_book     ON graph_build_jobs(book_id);
 CREATE INDEX idx_graph_build_jobs_status   ON graph_build_jobs(status);
 CREATE INDEX idx_graph_build_jobs_version  ON graph_build_jobs(book_id, graph_version);
 CREATE INDEX idx_graph_build_jobs_metadata ON graph_build_jobs USING GIN(metadata);
+
+CREATE TRIGGER trg_graph_build_jobs_updated_at
+BEFORE UPDATE ON graph_build_jobs
+FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- Only one COMPLETED build per (book, graph_version)
 CREATE UNIQUE INDEX uq_completed_graph_version
@@ -745,6 +751,10 @@ CREATE INDEX idx_graph_versions_current ON graph_versions(book_id) WHERE is_curr
 CREATE UNIQUE INDEX uq_current_graph_version_per_book
     ON graph_versions(book_id)
     WHERE is_current = TRUE;
+
+CREATE TRIGGER trg_graph_versions_updated_at
+BEFORE UPDATE ON graph_versions
+FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- Trigger: when a new graph_versions row is set is_current = TRUE,
 -- automatically demote all other versions for that book.
@@ -838,7 +848,7 @@ CREATE TABLE user_books (
         ON DELETE CASCADE,
 
     -- FK to graph_versions — typed, validated, no free integers
-    pinned_graph_version_id UUID NOT NULL
+    pinned_graph_version_id UUID
         REFERENCES graph_versions(id)
         ON DELETE RESTRICT,
 
