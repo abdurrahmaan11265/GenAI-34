@@ -2,7 +2,7 @@
 
 # READ THIS FIRST
 
-This document is the single source of truth for LearnGraph AI.
+This document is the single source of truth for Lexis AI.
 
 Every human contributor, AI coding agent, Claude Code session, Cursor agent, Copilot agent, OpenHands session, reviewer, and maintainer must follow this document.
 
@@ -32,7 +32,7 @@ AGENTS.md wins.
 
 # PROJECT MISSION
 
-LearnGraph AI is a learner intelligence platform.
+Lexis AI is a learner intelligence platform.
 
 It is NOT:
 
@@ -80,7 +80,7 @@ They do NOT know:
 * What concepts are mastered
 * What should be learned next
 
-LearnGraph AI maintains:
+Lexis AI maintains:
 
 * Mastery
 * Memory
@@ -107,15 +107,14 @@ No contributor may change them without unanimous team approval.
 
 Frozen:
 
-Data Structures & Algorithms
+Uploaded PDF Textbooks (Adaptive Book-Learning)
 
 Not:
 
-* ML
-* OS
-* DBMS
-* Web Development
-* Multi-domain learning
+* Hardcoded DSA Curriculum
+* Static video courses
+* Pre-written syllabi
+
 
 ---
 
@@ -289,11 +288,11 @@ Not required.
 
 ---
 
-Multi-Domain Learning
+Pre-Written Syllabi
 
 Reason:
 
-We solve DSA first.
+Curriculum must be dynamically generated from the uploaded book's knowledge graph.
 
 ---
 
@@ -343,15 +342,11 @@ We solve DSA first.
 
 # DOCUMENT PRECEDENCE
 
-1. schema.sql
-2. openapi.yaml
-3. mastery_engine.md
-4. core_queries.cypher
-5. concept.json
-6. PSA
-7. PLS
-8. TRD
-9. PRD
+1. docs/architecture/system_design.md
+2. docs/architecture/ingestion_pipeline.md
+3. docs/architecture/mastery_engine.md
+4. schema.sql
+5. docs/prompts/*
 
 Rule:
 
@@ -627,12 +622,12 @@ Neo4j owns:
 * Recommendations
 
 Concept Mapping Contract:
-concept.json `difficulty_level` -> concepts `difficulty`
-concept.json `bloom_level` -> concepts `bloom_target`
-concept.json `estimated_duration` -> concepts `estimated_minutes`
+Ingestion Pipeline `difficulty_level` -> concepts `difficulty`
+Ingestion Pipeline `bloom_level` -> concepts `bloom_target`
+Ingestion Pipeline `estimated_duration` -> concepts `estimated_minutes`
 
 Concept ID Namespace Constraint:
-Concept IDs come ONLY from `concept.json`. Both Postgres and Neo4j seed from this file. `concept.json` is canonical.
+Concept IDs come ONLY from the Document Ingestion Pipeline extraction. Both Postgres and Neo4j are populated dynamically per book.
 
 Atomic Assessment Workflow: 
 `/assessments/{id}/complete` is synchronous. Steps: (1) Score responses, (2) Initialize concept_mastery, (3) Initialize HAS_MASTERY edges in Neo4j, (4) Generate DNA via Gemini, (5) Store DNA, (6) Return DNA. If any step fails, rollback and return error.
@@ -995,9 +990,9 @@ Good enough.
 
 ---
 
-Why DSA?
+Why PDF Book Ingestion?
 
-Strong prerequisite structure.
+Allows infinite scaling across any domain by generating graphs dynamically.
 
 ---
 
