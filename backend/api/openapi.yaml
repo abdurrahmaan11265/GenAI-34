@@ -1,0 +1,628 @@
+openapi: 3.0.3
+info:
+  title: LearnGraph AI Core API
+  version: 1.0.0
+  description: FastAPI backend for the LearnGraph AI personalized DSA learning platform.
+servers:
+  - url: http://localhost:8000/api/v1
+    description: Local development server
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    # -- Auth Schemas --
+    UserRegisterRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+          example: "student@example.com"
+        password:
+          type: string
+          minLength: 8
+          example: "securepassword123"
+    UserLoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+          example: "student@example.com"
+        password:
+          type: string
+          minLength: 8
+          example: "securepassword123"
+    TokenResponse:
+      type: object
+      required: [access_token, token_type]
+      properties:
+        access_token:
+          type: string
+          example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+        token_type:
+          type: string
+          example: "bearer"
+
+    # -- Assessment Schemas --
+    AssessmentStartResponse:
+      type: object
+      required: [assessment_id, status]
+      properties:
+        assessment_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          example: "in_progress"
+          
+    AssessmentResponseSubmit:
+      type: object
+      required: [question_id, question_type, response_text]
+      properties:
+        question_id:
+          type: string
+          example: "q_123"
+        question_type:
+          type: string
+          enum: [MCQ, CODE, TEXT]
+        response_text:
+          type: string
+          example: "O(n log n)"
+        selected_option:
+          type: string
+          description: "Used for MCQ question types."
+          example: "B"
+          
+    # -- DNA Schemas --
+    DNAReport:
+      type: object
+      required: [user_id, version, dna_data]
+      properties:
+        user_id:
+          type: string
+          format: uuid
+        version:
+          type: integer
+          example: 1
+        dna_data:
+          type: object
+          description: Dynamic JSON containing learning style, domain, and misconceptions.
+          example:
+            learning_style: "visual"
+            preferred_domain: "gaming"
+
+    # -- Curriculum Schemas --
+    CurriculumPath:
+      type: object
+      required: [version, items]
+      properties:
+        version:
+          type: integer
+          example: 2
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/CurriculumItem'
+            
+    CurriculumItem:
+      type: object
+      required: [concept_id, status]
+      properties:
+        concept_id:
+          type: string
+          example: "hash_tables"
+        status:
+          type: string
+          enum: [pending, in_progress, completed]
+        reason:
+          type: string
+          example: "Prerequisites satisfied and identified as weakest area."
+
+    # -- Lesson / Tutor Schemas --
+    LessonSessionStart:
+      type: object
+      required: [concept_id]
+      properties:
+        concept_id:
+          type: string
+          example: "recursion"
+          
+    LessonSessionResponse:
+      type: object
+      required: [session_id, concept_id]
+      properties:
+        session_id:
+          type: string
+          format: uuid
+        concept_id:
+          type: string
+          example: "recursion"
+          
+    TutorChatRequest:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+          example: "I don't understand how the base case works here."
+          
+    TutorChatResponse:
+      type: object
+      required: [reply, hint_level]
+      properties:
+        reply:
+          type: string
+          example: "Think about what happens when the array is empty..."
+        hint_level:
+          type: integer
+          example: 0
+
+    # -- Progress / Quiz Schemas --
+    QuizAttemptSubmit:
+      type: object
+      required: [concept_id, responses]
+      properties:
+        concept_id:
+          type: string
+          example: "recursion"
+        responses:
+          type: array
+          items:
+            type: object
+            required: [question_id]
+            properties:
+              question_id:
+                type: string
+              response_text:
+                type: string
+              selected_option:
+                type: string
+                
+    MasteryUpdateResponse:
+      type: object
+      required: [concept_id, new_score, unlocked_concepts]
+      properties:
+        concept_id:
+          type: string
+          example: "recursion"
+        new_score:
+          type: number
+          format: float
+          example: 0.88
+        unlocked_concepts:
+          type: array
+          items:
+            type: string
+          example: ["trees", "dfs", "dynamic_programming"]
+
+    # -- Recommendation Schemas --
+    RecommendationResponse:
+      type: object
+      required: [concept_id, reason]
+      properties:
+        concept_id:
+          type: string
+          example: "hash_tables"
+        reason:
+          type: string
+          example: "Prerequisites met and shortest path to your goal."
+        dependency_depth:
+          type: integer
+          example: 3
+        mastery_gap:
+          type: number
+          format: float
+          example: 0.45
+          
+    # -- Error Schemas --
+    ErrorResponse:
+      type: object
+      required: [detail]
+      properties:
+        detail:
+          type: string
+          example: "Concept not found or prerequisites unmet."
+
+    # -- Dashboard / Graph Schemas --
+    DashboardSummary:
+      type: object
+      properties:
+        total_concepts:
+          type: integer
+          example: 50
+        mastered_concepts:
+          type: integer
+          example: 12
+        current_concept:
+          type: string
+          example: "hash_tables"
+        mastery_average:
+          type: number
+          format: float
+          example: 0.72
+        retention_average:
+          type: number
+          format: float
+          example: 0.89
+        weak_concepts:
+          type: array
+          items:
+            type: string
+          example: ["recursion", "binary_search"]
+        unlocked_concepts:
+          type: array
+          items:
+            type: string
+          example: ["trees", "graphs"]
+
+    GraphVisualizationResponse:
+      type: object
+      properties:
+        nodes:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              name:
+                type: string
+              difficulty:
+                type: integer
+              mastery_score:
+                type: number
+              is_currently_learning:
+                type: boolean
+        edges:
+          type: array
+          items:
+            type: object
+            properties:
+              source:
+                type: string
+              target:
+                type: string
+              value:
+                type: number
+
+    CurrentLearningStateResponse:
+      type: object
+      properties:
+        concept_id:
+          type: string
+        name:
+          type: string
+        difficulty:
+          type: integer
+
+security:
+  - BearerAuth: []
+
+paths:
+  /auth/register:
+    post:
+      summary: Register a new student
+      tags: [Auth]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserRegisterRequest'
+      responses:
+        '201':
+          description: Successfully registered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+        '400':
+          description: Email already registered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/login:
+    post:
+      summary: Authenticate a student
+      tags: [Auth]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserLoginRequest'
+      responses:
+        '200':
+          description: Successfully authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /assessments:
+    post:
+      summary: Start a new diagnostic assessment
+      tags: [Assessment]
+      responses:
+        '201':
+          description: Assessment created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssessmentStartResponse'
+        '401':
+          description: Unauthorized
+
+  /assessments/{id}/responses:
+    post:
+      summary: Submit a response to an assessment question
+      tags: [Assessment]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssessmentResponseSubmit'
+      responses:
+        '200':
+          description: Response recorded successfully
+        '404':
+          description: Assessment not found
+
+  /assessments/{id}/complete:
+    post:
+      summary: Complete the assessment and trigger DNA generation
+      tags: [Assessment]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Assessment completed, Learning DNA generated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DNAReport'
+        '400':
+          description: Assessment already completed
+
+  /dna:
+    get:
+      summary: Get the latest Learning DNA report for the user
+      tags: [DNA]
+      parameters:
+        - name: version
+          in: query
+          required: false
+          schema:
+            type: integer
+          description: Specific version of DNA report to retrieve
+      responses:
+        '200':
+          description: Latest DNA report
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DNAReport'
+        '404':
+          description: DNA report not found
+
+  /curriculum:
+    get:
+      summary: Get the current active curriculum path
+      tags: [Curriculum]
+      responses:
+        '200':
+          description: Current curriculum
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CurriculumPath'
+
+  /curriculum/replan:
+    post:
+      summary: Force a curriculum recalculation based on current graph state
+      tags: [Curriculum]
+      responses:
+        '200':
+          description: Replanned curriculum generated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CurriculumPath'
+
+  /lessons/start:
+    post:
+      summary: Start learning a specific concept
+      description: This establishes the CURRENTLY_LEARNING edge in Neo4j.
+      tags: [Lesson]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LessonSessionStart'
+      responses:
+        '201':
+          description: Lesson session created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LessonSessionResponse'
+        '400':
+          description: Prerequisites not met
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /lessons/generate:
+    post:
+      summary: Generate a personalized lesson
+      tags: [Lesson]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [concept_id]
+              properties:
+                concept_id:
+                  type: string
+      responses:
+        '200':
+          description: Generated lesson
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /lessons/{session_id}/content:
+    get:
+      summary: Retrieve the generated content for a lesson session
+      tags: [Lesson]
+      parameters:
+        - name: session_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Lesson content
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /learning/current:
+    get:
+      summary: Get the student's current learning focus
+      description: Returns the concept they are actively studying in the current session.
+      tags: [Lesson]
+      responses:
+        '200':
+          description: Current learning state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CurrentLearningStateResponse'
+        '404':
+          description: No active concept
+
+  /tutor/{session_id}/chat:
+    post:
+      summary: Send a message to the Socratic Tutor agent
+      tags: [Tutor]
+      parameters:
+        - name: session_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TutorChatRequest'
+      responses:
+        '200':
+          description: Tutor replied
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TutorChatResponse'
+        '404':
+          description: Session not found
+
+  /progress/quiz:
+    post:
+      summary: Submit end-of-lesson quiz results
+      description: Triggers mastery_engine updates and Neo4j mastery updates.
+      tags: [Progress]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QuizAttemptSubmit'
+      responses:
+        '200':
+          description: Mastery updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MasteryUpdateResponse'
+
+  /recommendations:
+    get:
+      summary: Get the absolute best next concept to learn
+      description: Returns the optimal concept based on lowest dependency depth among eligible concepts.
+      tags: [Recommendation]
+      responses:
+        '200':
+          description: Recommended concept
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecommendationResponse'
+        '404':
+          description: No recommendations available (all mastered or no path)
+
+  /dashboard/summary:
+    get:
+      summary: Get student's overall learning snapshot
+      tags: [Dashboard]
+      responses:
+        '200':
+          description: Dashboard aggregate summary
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DashboardSummary'
+
+  /graph:
+    get:
+      summary: Get the knowledge graph visualization data
+      description: Returns all nodes (with user mastery) and topology edges for D3.js plotting.
+      tags: [Graph]
+      responses:
+        '200':
+          description: Graph nodes and edges
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GraphVisualizationResponse'
