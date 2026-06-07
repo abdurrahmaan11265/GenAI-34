@@ -306,7 +306,19 @@ interface AssessSession {
   topicIndex: number;
   pending: { question: BackendQuestion | null; completed: boolean } | null;
 }
-const assessSessions: Record<string, AssessSession> = {};
+
+// Persisted in sessionStorage (not a module variable) so the active assessment
+// survives reloads / Next.js Fast Refresh between rendering a question and
+// submitting the answer.
+const ASSESS_KEY = (bookId: string) => `lexis_assess_${bookId}`;
+function loadAssess(bookId: string): AssessSession | null {
+  if (typeof window === "undefined") return null;
+  const raw = window.sessionStorage.getItem(ASSESS_KEY(bookId));
+  return raw ? (JSON.parse(raw) as AssessSession) : null;
+}
+function saveAssess(bookId: string, s: AssessSession): void {
+  if (typeof window !== "undefined") window.sessionStorage.setItem(ASSESS_KEY(bookId), JSON.stringify(s));
+}
 
 const mapQuestion = (q: BackendQuestion) => ({
   question: {
@@ -328,24 +340,22 @@ const mapQuestion = (q: BackendQuestion) => ({
 
 export async function startAssessment(token: string, bookId: string): Promise<AssessmentNextResponseDTO> {
   const raw = await apiPost<BackendStart>("/assessments", { book_id: bookId }, { token });
-  assessSessions[bookId] = {
+  const sess: AssessSession = {
     assessmentId: raw.assessment_id,
     totalTopics: raw.progress?.concepts_total ?? 0,
     topicIndex: 0,
     pending: null,
   };
+  saveAssess(bookId, sess);
   if (raw.completed || !raw.question) return { done: true };
   const mapped = mapQuestion(raw.question);
-  return {
-    done: false, ...mapped, topicIndex: 0,
-    totalTopics: assessSessions[bookId].totalTopics, topoOrder: [],
-  };
+  return { done: false, ...mapped, topicIndex: 0, totalTopics: sess.totalTopics, topoOrder: [] };
 }
 
 export async function submitAssessmentAnswer(
   token: string, data: AssessmentAnswerRequestDTO
 ): Promise<AssessmentAnswerResponseDTO> {
-  const sess = assessSessions[data.bookId];
+  const sess = loadAssess(data.bookId);
   if (!sess) throw new Error("No active assessment session.");
   const raw = await apiPost<BackendAnswer>(
     `/assessments/${sess.assessmentId}/responses`,
@@ -353,6 +363,7 @@ export async function submitAssessmentAnswer(
     { token }
   );
   sess.pending = { question: raw.next_question, completed: raw.completed };
+  saveAssess(data.bookId, sess);
   return {
     correct: raw.result.is_correct,
     isMastered: raw.result.is_correct,
@@ -360,12 +371,13 @@ export async function submitAssessmentAnswer(
   };
 }
 
-export async function getNextAssessmentQuestion(token: string, bookId: string): Promise<AssessmentNextResponseDTO> {
-  const sess = assessSessions[bookId];
+export async function getNextAssessmentQuestion(_token: string, bookId: string): Promise<AssessmentNextResponseDTO> {
+  const sess = loadAssess(bookId);
   if (!sess || !sess.pending || sess.pending.completed || !sess.pending.question) {
     return { done: true };
   }
   sess.topicIndex += 1;
+  saveAssess(bookId, sess);
   const mapped = mapQuestion(sess.pending.question);
   return { done: false, ...mapped, topicIndex: sess.topicIndex, totalTopics: sess.totalTopics, topoOrder: [] };
 }
@@ -378,7 +390,7 @@ const placementToState = (p: string): NodeState =>
   p === "MASTERED" ? "mastered" : p === "READY" ? "available" : p === "LEARNING" ? "available" : "locked";
 
 export async function completeAssessment(token: string, bookId: string): Promise<AssessmentCompleteResponseDTO> {
-  const sess = assessSessions[bookId];
+  const sess = loadAssess(bookId);
   if (!sess) throw new Error("No active assessment session.");
   const raw = await apiPost<BackendComplete>(`/assessments/${sess.assessmentId}/complete`, {}, { token });
   return {
