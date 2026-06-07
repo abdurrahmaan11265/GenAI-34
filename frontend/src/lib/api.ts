@@ -253,7 +253,7 @@ export async function deleteGraphEdge(token: string, bookId: string, edgeId: str
 
 interface BackendPlanItem {
   conceptId: string; title: string; orderIndex: number; state: string;
-  mastery: number; estimatedMinutes: number; unmetPrerequisites: string[];
+  mastery: number; estimatedMinutes: number; unmetPrerequisites: string[]; subtopics?: string[];
 }
 interface BackendDailyPlan {
   bookId: string; mode: DailyPlanDTO["mode"]; revise: BackendPlanItem[]; learn: BackendPlanItem[];
@@ -274,6 +274,7 @@ export async function getDailyPlan(token: string, bookId: string): Promise<Daily
     lastReviewed: null,
     nextDue: null,
     recallProbability: it.mastery,
+    subtopics: it.subtopics ?? [],
   });
   const planNodes = [
     ...plan.revise.map((it) => mk(it, "revise")),

@@ -11,6 +11,7 @@ class CurriculumItemDTO(BaseModel):
     mastery: float
     estimatedMinutes: int = Field(alias="estimatedMinutes")
     unmetPrerequisites: List[str] = Field(alias="unmetPrerequisites", default_factory=list)
+    subtopics: List[str] = Field(default_factory=list)
 
 
 class CurriculumDTO(BaseModel):

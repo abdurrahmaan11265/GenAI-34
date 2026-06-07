@@ -99,3 +99,8 @@ class HintOutput(BaseModel):
     hint_level: int = Field(default=1)
     hint: str = Field(default="")
     reason: str = Field(default="")
+
+
+class SubtopicsOutput(BaseModel):
+    """Sub-topics that make up a concept (shown in the course/daily plan)."""
+    subtopics: List[str] = Field(default_factory=list, description="3-5 short sub-topic titles within the concept.")

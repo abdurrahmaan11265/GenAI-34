@@ -1,9 +1,11 @@
 from typing import Optional
 
+from datetime import date
+
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.curriculum import CurriculumPlan
+from app.models.curriculum import CurriculumPlan, DailyPlan
 
 
 class CurriculumRepository:
@@ -45,6 +47,27 @@ class CurriculumRepository:
             .limit(1)
         )
         return row.scalars().first()
+
+    async def get_today_plan(self, user_id: str, book_id: str) -> "DailyPlan | None":
+        row = await self.session.execute(
+            select(DailyPlan).where(
+                DailyPlan.user_id == user_id,
+                DailyPlan.book_id == book_id,
+                DailyPlan.plan_date == date.today(),
+            )
+        )
+        return row.scalars().first()
+
+    async def save_today_plan(self, user_id: str, book_id: str, learn_concept_ids: list) -> None:
+        existing = await self.get_today_plan(user_id, book_id)
+        if existing is not None:
+            existing.learn_concept_ids = learn_concept_ids
+        else:
+            self.session.add(DailyPlan(
+                user_id=user_id, book_id=book_id,
+                plan_date=date.today(), learn_concept_ids=learn_concept_ids,
+            ))
+        await self.session.flush()
 
     async def daily_new_node_cap(self, user_id: str) -> int:
         row = await self.session.execute(

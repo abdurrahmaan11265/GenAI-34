@@ -304,6 +304,7 @@ export interface PlanNodeDTO {
   lastReviewed: string | null;
   nextDue: string | null;
   recallProbability: number; // 0.0–1.0
+  subtopics?: string[];
 }
 
 export interface DailyPlanDTO {

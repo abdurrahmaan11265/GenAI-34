@@ -27,6 +27,7 @@ class CurriculumItem:
     mastery: float
     estimated_minutes: int
     unmet_prerequisites: List[str] = field(default_factory=list)  # titles, for "complete X first"
+    subtopics: List[str] = field(default_factory=list)            # sub-topics within the concept
 
 
 def build_curriculum(concepts: Sequence[dict],
@@ -65,6 +66,7 @@ def build_curriculum(concepts: Sequence[dict],
             mastery=round(float(masteries.get(cid, 0.0)), 4),
             estimated_minutes=int(c.get("estimated_minutes") or DEFAULT_MINUTES),
             unmet_prerequisites=unmet,
+            subtopics=list(c.get("subtopics") or []),
         ))
     return items
 

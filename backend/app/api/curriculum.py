@@ -43,5 +43,8 @@ async def get_daily_plan(
     book_id: str,
     user_id: str = Depends(get_current_user_id),
     service: CurriculumService = Depends(get_curriculum_service),
+    session: AsyncSession = Depends(get_db),
 ):
-    return await service.get_daily_plan(user_id, book_id)
+    result = await service.get_daily_plan(user_id, book_id)
+    await session.commit()  # persists today's frozen plan on first build
+    return result

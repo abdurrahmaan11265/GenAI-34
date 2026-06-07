@@ -16,7 +16,7 @@ from google import genai
 from google.genai import types
 
 from app.core.config import settings
-from app.schemas.llm import LessonOutput, TutorOutput, HintOutput
+from app.schemas.llm import LessonOutput, TutorOutput, HintOutput, SubtopicsOutput
 
 logger = logging.getLogger(__name__)
 PROMPT_VERSION = "v1"
@@ -84,6 +84,14 @@ class LessonLLM:
             .replace("{{STUDENT_MESSAGE}}", student_message)
         )
         return await self._call(prompt, TutorOutput, temperature=0.6)
+
+    async def generate_subtopics(self, concept_name: str, concept_summary: str) -> SubtopicsOutput:
+        prompt = (
+            "List 3 to 5 concise sub-topics (each 2-5 words) that make up the concept below. "
+            "These are the specific things a learner studies within it. Return JSON only.\n\n"
+            f"Concept: {concept_name}\nSummary: {concept_summary or ''}\n"
+        )
+        return await self._call(prompt, SubtopicsOutput, temperature=0.2)
 
     async def generate_hint(self, concept_name: str, question: str, hint_level: int,
                             previous_hints: List[str]) -> HintOutput:

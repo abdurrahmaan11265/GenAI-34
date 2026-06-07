@@ -143,22 +143,33 @@ export default function BookHomePage() {
                 {plan?.planNodes.slice(0, 5).map((n, i) => (
                   <div
                     key={i}
-                    className="flex items-center gap-3 bg-white rounded-lg p-2.5 border border-slate-100"
+                    className="bg-white rounded-lg p-2.5 border border-slate-100"
                   >
-                    <Badge
-                      variant={n.planType === "revise" ? "due" : "available"}
-                      className="text-[10px] shrink-0"
-                    >
-                      {n.planType === "revise" ? (
-                        <><RefreshCw className="h-2.5 w-2.5" /> Revise</>
-                      ) : (
-                        <><Sparkles className="h-2.5 w-2.5" /> Learn</>
-                      )}
-                    </Badge>
-                    <span className="text-sm text-slate-700 flex-1 truncate">
-                      {n.node?.title ?? n.nodeId}
-                    </span>
-                    <ChevronRight className="h-4 w-4 text-slate-300" />
+                    <div className="flex items-center gap-3">
+                      <Badge
+                        variant={n.planType === "revise" ? "due" : "available"}
+                        className="text-[10px] shrink-0"
+                      >
+                        {n.planType === "revise" ? (
+                          <><RefreshCw className="h-2.5 w-2.5" /> Revise</>
+                        ) : (
+                          <><Sparkles className="h-2.5 w-2.5" /> Learn</>
+                        )}
+                      </Badge>
+                      <span className="text-sm text-slate-700 flex-1 truncate">
+                        {n.node?.title ?? n.nodeId}
+                      </span>
+                      <ChevronRight className="h-4 w-4 text-slate-300" />
+                    </div>
+                    {(n.subtopics?.length ?? 0) > 0 && (
+                      <div className="flex flex-wrap gap-1.5 mt-2 pl-1">
+                        {n.subtopics!.map((st, si) => (
+                          <span key={si} className="text-[10px] text-slate-500 bg-slate-100 rounded-full px-2 py-0.5">
+                            {st}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 ))}
                 {(plan?.planNodes.length ?? 0) > 5 && (
