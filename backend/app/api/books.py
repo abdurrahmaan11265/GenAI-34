@@ -5,6 +5,9 @@ from app.api.deps import get_db, get_current_user_id
 from app.repositories.book_repo import BookRepository
 from app.services.book_service import BookService, mock_process_book_job
 from app.schemas.book import UploadResponse, JobStatusDTO, BookDTO, BookCreate, BookStatusDTO, BookDetailDTO, GraphDTO, BookSummaryDTO
+from app.schemas.graph_reveal import PersonalGraphDTO
+from app.repositories.graph_repo import GraphRepository
+from app.services.graph_reveal_service import GraphRevealService
 from app.core.db import AsyncSessionLocal
 
 router = APIRouter(prefix="/books", tags=["Books"])
@@ -73,6 +76,18 @@ async def get_book_graph(
     
     service = BookService(BookRepository(session))
     return await service.get_book_graph(book_id)
+
+@router.get("/{book_id}/knowledge-graph", response_model=PersonalGraphDTO)
+async def get_personal_knowledge_graph(
+    book_id: str,
+    user_id: str = Depends(get_current_user_id),
+    session: AsyncSession = Depends(get_db),
+):
+    """Personalized graph reveal: nodes + edges overlaid with this user's
+    per-concept state and mastery (four-state coloring for the map view)."""
+    service = GraphRevealService(GraphRepository(session))
+    return await service.get_personal_graph(user_id, book_id)
+
 
 @router.post("/{book_id}/graph/confirm")
 async def confirm_book_graph(
