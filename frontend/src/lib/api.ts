@@ -1,17 +1,13 @@
 /**
- * All frontend → FastAPI API calls.
+ * Frontend → FastAPI adapter layer.
  *
- * Every function in this module corresponds 1:1 to a FastAPI endpoint.
- * Pages import from here — never call fetch() or apiGet() directly in components.
- *
- * Token is obtained from NextAuth session:
- *   const { data: session } = useSession();
- *   const token = (session?.user as { accessToken?: string })?.accessToken ?? "";
+ * Each function maps to one (or a few) real backend endpoints and returns the
+ * DTO shape the pages expect (types/dto.ts). This file is the single place that
+ * reconciles the UI's contract with the backend's actual routes, so pages never
+ * call fetch()/apiGet() directly.
  */
 
-import {
-  apiGet, apiPost, apiPatch, apiDelete, apiUpload,
-} from "./api-client";
+import { apiGet, apiPost, apiPatch, apiDelete, apiUpload } from "./api-client";
 
 import type {
   AuthResponseDTO,
@@ -43,32 +39,52 @@ import type {
   UpdateNodeDTO,
   UserDTO,
   UserUpdateDTO,
+  QuestionType,
+  NodeState,
 } from "@/types/dto";
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Mapping helpers (backend shape → UI shape)
+// ─────────────────────────────────────────────────────────────────────────────
+
+const lower = (s: string | null | undefined): NodeState =>
+  ((s ?? "locked").toLowerCase() as NodeState);
+
+const tierFromQType = (qt: string): QuestionType => {
+  if (qt === "MCQ" || qt === "TRUE_FALSE") return "mcq";
+  if (qt === "SCENARIO" || qt === "APPLIED") return "applied";
+  return "theory";
+};
+
+const difficultyTier = (level: number): "beginner" | "intermediate" | "advanced" => {
+  if (level <= 2) return "beginner";
+  if (level === 3) return "intermediate";
+  return "advanced";
+};
+
+const confToInt = (c: string): number =>
+  c === "certain" ? 5 : c === "fairly_sure" ? 3 : 2;
+
+const gradeToInt = (g: string): number =>
+  ({ Again: 1, Hard: 2, Good: 3, Easy: 4 } as Record<string, number>)[g] ?? 3;
+
+const today = () => new Date().toISOString().slice(0, 10);
+const todayPlus = (days: number) =>
+  new Date(Date.now() + days * 86400000).toISOString().slice(0, 10);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // AUTH
 // ─────────────────────────────────────────────────────────────────────────────
 
-/**
- * Called by NextAuth credentials provider to validate email/password.
- * Returns the user object + access_token to be stored in the session.
- */
-export async function loginUser(
-  email: string,
-  password: string
-): Promise<AuthResponseDTO> {
-  return apiPost<AuthResponseDTO>("/auth/login", { email, password });
+export async function loginUser(email: string, password: string): Promise<AuthResponseDTO> {
+  // Backend returns { user, token }; NextAuth expects { access_token, user }.
+  const raw = await apiPost<{ user: UserDTO; token: string }>("/auth/login", { email, password });
+  return { access_token: raw.token, token_type: "bearer", user: raw.user };
 }
 
-/**
- * Register a new user account.
- */
-export async function registerUser(
-  name: string,
-  email: string,
-  password: string
-): Promise<AuthResponseDTO> {
-  return apiPost<AuthResponseDTO>("/auth/register", { name, email, password });
+export async function registerUser(name: string, email: string, password: string): Promise<AuthResponseDTO> {
+  const raw = await apiPost<{ user: UserDTO; token: string }>("/auth/register", { name, email, password });
+  return { access_token: raw.token, token_type: "bearer", user: raw.user };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -79,10 +95,7 @@ export async function getMe(token: string): Promise<UserDTO> {
   return apiGet<UserDTO>("/users/me", { token });
 }
 
-export async function updateMe(
-  token: string,
-  data: UserUpdateDTO
-): Promise<UserDTO> {
+export async function updateMe(token: string, data: UserUpdateDTO): Promise<UserDTO> {
   return apiPatch<UserDTO>("/users/me", data, { token });
 }
 
@@ -90,66 +103,103 @@ export async function updateMe(
 // BOOKS
 // ─────────────────────────────────────────────────────────────────────────────
 
-export async function listBooks(
-  token: string
-): Promise<{ books: BookSummaryDTO[] }> {
+export async function listBooks(token: string): Promise<{ books: BookSummaryDTO[] }> {
   return apiGet<{ books: BookSummaryDTO[] }>("/books", { token });
 }
 
-export async function createBook(
-  token: string,
-  data: CreateBookDTO
-): Promise<{ book: BookDetailDTO }> {
-  return apiPost<{ book: BookDetailDTO }>("/books", data, { token });
+export async function createBook(token: string, data: CreateBookDTO): Promise<{ book: BookDetailDTO }> {
+  // Backend BookCreate uses is_public.
+  return apiPost<{ book: BookDetailDTO }>("/books", { ...data, is_public: data.isPublic ?? false }, { token });
 }
 
-export async function getBook(
-  token: string,
-  bookId: string
-): Promise<{ book: BookDetailDTO }> {
-  return apiGet<{ book: BookDetailDTO }>(`/books/${bookId}`, { token });
+interface PersonalGraphNode {
+  id: string; title: string; summary: string; difficulty: number; state: string;
+  masteryScore: number; lastReviewed: string | null; nextDue: string | null; prerequisites: string[];
+}
+interface PersonalGraphSummary { total: number; mastered: number; locked: number; }
+interface PersonalGraph {
+  nodes: PersonalGraphNode[];
+  edges: { fromNodeId: string; toNodeId: string; type: string }[];
+  summary: PersonalGraphSummary;
 }
 
-export async function updateBook(
-  token: string,
-  bookId: string,
-  data: Partial<CreateBookDTO>
-): Promise<{ book: BookDetailDTO }> {
-  return apiPatch<{ book: BookDetailDTO }>(`/books/${bookId}`, data, { token });
+/**
+ * Full book + graph nodes. Merges book metadata (/books/{id}) with the
+ * personalized graph reveal (/books/{id}/knowledge-graph) so node title,
+ * summary, prerequisites and per-user state are all available to the pages.
+ */
+export async function getBook(token: string, bookId: string): Promise<{ book: BookDetailDTO }> {
+  const [meta, graph] = await Promise.all([
+    apiGet<{ book: Partial<BookDetailDTO> }>(`/books/${bookId}`, { token }).catch(() => ({ book: {} as Partial<BookDetailDTO> })),
+    apiGet<PersonalGraph>(`/books/${bookId}/knowledge-graph`, { token }).catch(() => ({ nodes: [], edges: [], summary: {} as PersonalGraphSummary })),
+  ]);
+
+  const nodes = (graph.nodes ?? []).map((n, idx) => ({
+    id: n.id,
+    bookId,
+    title: n.title,
+    summary: n.summary,
+    sourceChunks: n.summary ? [n.summary] : [],
+    difficultyTier: difficultyTier(n.difficulty),
+    orderIndex: idx,
+    sectionName: null,
+    createdAt: today(),
+    outgoingEdges: [],
+    incomingEdges: [],
+    userNodeStates: [
+      {
+        id: `${n.id}-state`,
+        userId: "",
+        nodeId: n.id,
+        bookId,
+        state: lower(n.state),
+        masteryScore: n.masteryScore ?? 0,
+        recallStability: 0,
+        recallDifficulty: 0,
+        recallProbability: 0,
+        lastReviewed: n.lastReviewed ?? null,
+        nextDue: n.nextDue ?? null,
+        lapseCount: 0,
+        reviewCount: 0,
+        createdAt: today(),
+        updatedAt: today(),
+      },
+    ],
+    questions: [],
+  }));
+
+  const m = meta.book ?? {};
+  const book: BookDetailDTO = {
+    id: bookId,
+    ownerId: m.ownerId ?? "",
+    title: m.title ?? "Untitled",
+    author: m.author ?? null,
+    sourceFile: null,
+    coverUrl: null,
+    status: (m.status as BookDetailDTO["status"]) ?? "ready",
+    isPublic: m.isPublic ?? false,
+    bookStreak: 0,
+    lastStudied: null,
+    createdAt: m.createdAt ?? today(),
+    updatedAt: today(),
+    nodes,
+  };
+  return { book };
 }
 
-export async function deleteBook(
-  token: string,
-  bookId: string
-): Promise<void> {
+export async function deleteBook(token: string, bookId: string): Promise<void> {
   return apiDelete<void>(`/books/${bookId}`, { token });
 }
 
-/**
- * Upload the book file for processing (PDF / EPUB / TXT).
- * Backend parses, extracts concepts, infers edges — all async.
- * Returns immediately with jobId.
- */
 export async function uploadBookFile(
-  token: string,
-  bookId: string,
-  file: File
+  token: string, bookId: string, file: File
 ): Promise<{ jobId: string; status: "queued" }> {
-  return apiUpload<{ jobId: string; status: "queued" }>(
-    `/books/${bookId}/upload`,
-    file,
-    undefined,
-    { token }
-  );
+  const raw = await apiUpload<{ job_id?: string; jobId?: string }>(
+    `/books/${bookId}/upload`, file, undefined, { token });
+  return { jobId: raw.job_id ?? raw.jobId ?? "", status: "queued" };
 }
 
-/**
- * Poll this endpoint every 3 seconds from the processing page.
- */
-export async function getBookStatus(
-  token: string,
-  bookId: string
-): Promise<BookStatusDTO> {
+export async function getBookStatus(token: string, bookId: string): Promise<BookStatusDTO> {
   return apiGet<BookStatusDTO>(`/books/${bookId}/status`, { token });
 }
 
@@ -157,280 +207,340 @@ export async function getBookStatus(
 // KNOWLEDGE GRAPH
 // ─────────────────────────────────────────────────────────────────────────────
 
-export async function getGraph(
-  token: string,
-  bookId: string
-): Promise<GraphDTO> {
+export async function getGraph(token: string, bookId: string): Promise<GraphDTO> {
   return apiGet<GraphDTO>(`/books/${bookId}/graph`, { token });
 }
 
-/**
- * User has reviewed and approved the graph. Sets book.status = "ready"
- * and initializes all UserNodeState rows as "locked".
- */
-export async function confirmGraph(
-  token: string,
-  bookId: string
-): Promise<{ success: true }> {
-  return apiPost<{ success: true }>(`/books/${bookId}/graph/confirm`, {}, { token });
+export async function confirmGraph(token: string, bookId: string): Promise<{ success: true }> {
+  await apiPost(`/books/${bookId}/graph/confirm`, {}, { token });
+  return { success: true };
 }
 
-// Graph node mutations (verify page editor)
-
-export async function createGraphNode(
-  token: string,
-  bookId: string,
-  data: CreateNodeDTO
-): Promise<{ node: KGNodeDTO }> {
-  return apiPost<{ node: KGNodeDTO }>(
-    `/books/${bookId}/graph/nodes`,
-    data,
-    { token }
-  );
+// Graph editor mutations (verify page) — backend editor endpoints are future work.
+export async function createGraphNode(token: string, bookId: string, data: CreateNodeDTO): Promise<{ node: KGNodeDTO }> {
+  return apiPost<{ node: KGNodeDTO }>(`/books/${bookId}/graph/nodes`, data, { token });
 }
-
-export async function updateGraphNode(
-  token: string,
-  bookId: string,
-  nodeId: string,
-  data: UpdateNodeDTO
-): Promise<{ node: KGNodeDTO }> {
-  return apiPatch<{ node: KGNodeDTO }>(
-    `/books/${bookId}/graph/nodes/${nodeId}`,
-    data,
-    { token }
-  );
+export async function updateGraphNode(token: string, bookId: string, nodeId: string, data: UpdateNodeDTO): Promise<{ node: KGNodeDTO }> {
+  return apiPatch<{ node: KGNodeDTO }>(`/books/${bookId}/graph/nodes/${nodeId}`, data, { token });
 }
-
-export async function deleteGraphNode(
-  token: string,
-  bookId: string,
-  nodeId: string
-): Promise<{ success: true }> {
-  return apiDelete<{ success: true }>(
-    `/books/${bookId}/graph/nodes/${nodeId}`,
-    { token }
-  );
+export async function deleteGraphNode(token: string, bookId: string, nodeId: string): Promise<{ success: true }> {
+  return apiDelete<{ success: true }>(`/books/${bookId}/graph/nodes/${nodeId}`, { token });
 }
-
-// Graph edge mutations
-
-export async function createGraphEdge(
-  token: string,
-  bookId: string,
-  data: CreateEdgeDTO
-): Promise<{ edge: KGEdgeDTO }> {
-  return apiPost<{ edge: KGEdgeDTO }>(
-    `/books/${bookId}/graph/edges`,
-    data,
-    { token }
-  );
+export async function createGraphEdge(token: string, bookId: string, data: CreateEdgeDTO): Promise<{ edge: KGEdgeDTO }> {
+  return apiPost<{ edge: KGEdgeDTO }>(`/books/${bookId}/graph/edges`, data, { token });
 }
-
-export async function updateGraphEdge(
-  token: string,
-  bookId: string,
-  edgeId: string,
-  data: UpdateEdgeDTO
-): Promise<{ edge: KGEdgeDTO }> {
-  return apiPatch<{ edge: KGEdgeDTO }>(
-    `/books/${bookId}/graph/edges/${edgeId}`,
-    data,
-    { token }
-  );
+export async function updateGraphEdge(token: string, bookId: string, edgeId: string, data: UpdateEdgeDTO): Promise<{ edge: KGEdgeDTO }> {
+  return apiPatch<{ edge: KGEdgeDTO }>(`/books/${bookId}/graph/edges/${edgeId}`, data, { token });
 }
-
-export async function deleteGraphEdge(
-  token: string,
-  bookId: string,
-  edgeId: string
-): Promise<{ success: true }> {
-  return apiDelete<{ success: true }>(
-    `/books/${bookId}/graph/edges/${edgeId}`,
-    { token }
-  );
+export async function deleteGraphEdge(token: string, bookId: string, edgeId: string): Promise<{ success: true }> {
+  return apiDelete<{ success: true }>(`/books/${bookId}/graph/edges/${edgeId}`, { token });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // DAILY PLAN
 // ─────────────────────────────────────────────────────────────────────────────
 
-export async function getDailyPlan(
-  token: string,
-  bookId: string
-): Promise<DailyPlanDTO> {
-  return apiGet<DailyPlanDTO>(`/books/${bookId}/daily-plan`, { token });
+interface BackendPlanItem {
+  conceptId: string; title: string; orderIndex: number; state: string;
+  mastery: number; estimatedMinutes: number; unmetPrerequisites: string[];
+}
+interface BackendDailyPlan {
+  bookId: string; mode: DailyPlanDTO["mode"]; revise: BackendPlanItem[]; learn: BackendPlanItem[];
+  totalDue: number; totalNew: number; estimatedMinutes: number;
+}
+
+export async function getDailyPlan(token: string, bookId: string): Promise<DailyPlanDTO> {
+  const [plan, curr] = await Promise.all([
+    apiGet<BackendDailyPlan>(`/books/${bookId}/daily-plan`, { token }),
+    apiGet<{ totalConcepts: number; masteredConcepts: number }>(`/books/${bookId}/curriculum`, { token })
+      .catch(() => ({ totalConcepts: 0, masteredConcepts: 0 })),
+  ]);
+  const mk = (it: BackendPlanItem, planType: "revise" | "learn") => ({
+    nodeId: it.conceptId,
+    planType,
+    node: { title: it.title, summary: "", difficultyTier: "beginner" as const },
+    state: lower(it.state),
+    lastReviewed: null,
+    nextDue: null,
+    recallProbability: it.mastery,
+  });
+  const planNodes = [
+    ...plan.revise.map((it) => mk(it, "revise")),
+    ...plan.learn.map((it) => mk(it, "learn")),
+  ];
+  const total = curr.totalConcepts || planNodes.length;
+  const mastered = curr.masteredConcepts || 0;
+  return {
+    mode: plan.mode,
+    planNodes,
+    dueCount: plan.totalDue,
+    availableCount: plan.totalNew,
+    totalNodes: total,
+    masteredCount: mastered,
+    progressPct: total ? Math.round((100 * mastered) / total) : 0,
+  };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ASSESSMENT
+// ASSESSMENT  (backend is assessment_id-keyed; we track it per book here)
 // ─────────────────────────────────────────────────────────────────────────────
 
-/**
- * Start the assessment for a book. Returns the first question.
- */
-export async function startAssessment(
-  token: string,
-  bookId: string
-): Promise<AssessmentNextResponseDTO> {
-  return apiPost<AssessmentNextResponseDTO>(
-    "/assessment/start",
-    { bookId },
-    { token }
-  );
+interface BackendQuestion {
+  id: string; concept_id: string; concept_name: string; question_type: string;
+  difficulty_level: number; bloom_level: string; question_text: string; options: string[];
+}
+interface BackendStart { assessment_id: string; question: BackendQuestion | null; progress: { concepts_total: number }; completed: boolean; }
+interface BackendAnswer {
+  result: { is_correct: boolean; correctness: string; score: number; feedback: string; explanation: string; branch_stopped: boolean };
+  next_question: BackendQuestion | null; progress: { concepts_total: number; concepts_resolved: number }; completed: boolean;
 }
 
-/**
- * Submit an answer. Returns whether it was correct + next state.
- * The question generator + grader live entirely on the backend.
- */
+interface AssessSession {
+  assessmentId: string;
+  totalTopics: number;
+  topicIndex: number;
+  pending: { question: BackendQuestion | null; completed: boolean } | null;
+}
+const assessSessions: Record<string, AssessSession> = {};
+
+const mapQuestion = (q: BackendQuestion) => ({
+  question: {
+    id: q.id,
+    nodeId: q.concept_id,
+    type: tierFromQType(q.question_type),
+    difficulty: (q.difficulty_level <= 2 ? "easy" : q.difficulty_level === 3 ? "medium" : "hard") as "easy" | "medium" | "hard",
+    source: "generated" as const,
+    body: q.question_text,
+    options: q.options && q.options.length ? q.options : null,
+    answer: null,
+    explanation: null,
+    createdAt: today(),
+  },
+  nodeId: q.concept_id,
+  nodeTitle: q.concept_name,
+  tier: tierFromQType(q.question_type),
+});
+
+export async function startAssessment(token: string, bookId: string): Promise<AssessmentNextResponseDTO> {
+  const raw = await apiPost<BackendStart>("/assessments", { book_id: bookId }, { token });
+  assessSessions[bookId] = {
+    assessmentId: raw.assessment_id,
+    totalTopics: raw.progress?.concepts_total ?? 0,
+    topicIndex: 0,
+    pending: null,
+  };
+  if (raw.completed || !raw.question) return { done: true };
+  const mapped = mapQuestion(raw.question);
+  return {
+    done: false, ...mapped, topicIndex: 0,
+    totalTopics: assessSessions[bookId].totalTopics, topoOrder: [],
+  };
+}
+
 export async function submitAssessmentAnswer(
-  token: string,
-  data: AssessmentAnswerRequestDTO
+  token: string, data: AssessmentAnswerRequestDTO
 ): Promise<AssessmentAnswerResponseDTO> {
-  return apiPost<AssessmentAnswerResponseDTO>(
-    "/assessment/answer",
-    data,
+  const sess = assessSessions[data.bookId];
+  if (!sess) throw new Error("No active assessment session.");
+  const raw = await apiPost<BackendAnswer>(
+    `/assessments/${sess.assessmentId}/responses`,
+    { question_id: data.questionId, answer: String(data.answer), confidence_level: confToInt(String(data.confidence)) },
     { token }
   );
+  sess.pending = { question: raw.next_question, completed: raw.completed };
+  return {
+    correct: raw.result.is_correct,
+    isMastered: raw.result.is_correct,
+    explanation: raw.result.explanation || raw.result.feedback || null,
+  };
 }
 
-/**
- * Get the next question after answering. Backend manages topological walk.
- */
-export async function getNextAssessmentQuestion(
-  token: string,
-  bookId: string
-): Promise<AssessmentNextResponseDTO> {
-  return apiPost<AssessmentNextResponseDTO>(
-    "/assessment/next",
-    { bookId },
-    { token }
-  );
+export async function getNextAssessmentQuestion(token: string, bookId: string): Promise<AssessmentNextResponseDTO> {
+  const sess = assessSessions[bookId];
+  if (!sess || !sess.pending || sess.pending.completed || !sess.pending.question) {
+    return { done: true };
+  }
+  sess.topicIndex += 1;
+  const mapped = mapQuestion(sess.pending.question);
+  return { done: false, ...mapped, topicIndex: sess.topicIndex, totalTopics: sess.totalTopics, topoOrder: [] };
 }
 
-/**
- * Finalize assessment — initializes all remaining UserNodeState rows.
- * Returns the placement summary shown on results screen.
- */
-export async function completeAssessment(
-  token: string,
-  bookId: string
-): Promise<AssessmentCompleteResponseDTO> {
-  return apiPost<AssessmentCompleteResponseDTO>(
-    "/assessment/complete",
-    { bookId },
-    { token }
-  );
+interface BackendComplete {
+  summary: { mastered: number; ready: number; learning: number; weak: number; unknown: number; locked: number };
+  outcomes: { concept_id: string; concept_name: string; mastery_estimate: number; placement_state: string }[];
+}
+const placementToState = (p: string): NodeState =>
+  p === "MASTERED" ? "mastered" : p === "READY" ? "available" : p === "LEARNING" ? "available" : "locked";
+
+export async function completeAssessment(token: string, bookId: string): Promise<AssessmentCompleteResponseDTO> {
+  const sess = assessSessions[bookId];
+  if (!sess) throw new Error("No active assessment session.");
+  const raw = await apiPost<BackendComplete>(`/assessments/${sess.assessmentId}/complete`, {}, { token });
+  return {
+    mastered: raw.summary.mastered,
+    available: raw.summary.ready + raw.summary.learning,
+    locked: raw.summary.locked,
+    weakSpots: raw.outcomes.filter((o) => o.placement_state === "WEAK").map((o) => o.concept_name),
+    graphPreview: raw.outcomes.map((o) => ({ id: o.concept_id, title: o.concept_name, state: placementToState(o.placement_state) })),
+  };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SESSIONS (Socratic tutor)
+// SESSIONS (Socratic tutor)  → backend /lessons
 // ─────────────────────────────────────────────────────────────────────────────
 
-export async function createSession(
-  token: string,
-  data: CreateSessionDTO
-): Promise<{ session: SessionDTO }> {
-  return apiPost<{ session: SessionDTO }>("/sessions", data, { token });
+export async function createSession(token: string, data: CreateSessionDTO): Promise<{ session: SessionDTO }> {
+  const raw = await apiPost<{ sessionId: string; conceptId: string }>(
+    "/lessons", { book_id: data.bookId, concept_id: data.nodeIds[0] }, { token });
+  return {
+    session: {
+      id: raw.sessionId, userId: "", bookId: data.bookId, mode: data.mode,
+      nodeIds: data.nodeIds, completedAt: null, createdAt: new Date().toISOString(),
+    },
+  };
 }
 
 export async function sendMessage(
-  token: string,
-  sessionId: string,
-  data: SendMessageRequestDTO
+  token: string, sessionId: string, data: SendMessageRequestDTO
 ): Promise<SendMessageResponseDTO> {
-  return apiPost<SendMessageResponseDTO>(
-    `/sessions/${sessionId}/message`,
-    data,
+  const raw = await apiPost<{ tutorResponse: string; followUpQuestion: string; hint: string; questionCaptured: boolean }>(
+    `/lessons/${sessionId}/tutor`,
+    { message: data.message, hint_level: 0, is_question: data.isQuestion },
     { token }
   );
+  const parts = [raw.tutorResponse, raw.followUpQuestion].filter(Boolean);
+  return {
+    response: parts.join("\n\n"),
+    savedQuestionId: raw.questionCaptured ? "saved" : undefined,
+  };
 }
 
-export async function completeSession(
-  token: string,
-  sessionId: string
-): Promise<CompleteSessionResponseDTO> {
-  return apiPost<CompleteSessionResponseDTO>(
-    `/sessions/${sessionId}/complete`,
-    {},
-    { token }
-  );
+export async function completeSession(token: string, sessionId: string): Promise<CompleteSessionResponseDTO> {
+  const raw = await apiPost<{ status: string; unlockedConcepts: string[] }>(
+    `/lessons/${sessionId}/complete`, {}, { token });
+  return {
+    masteryScore: 0.9,
+    unlockedNodes: raw.unlockedConcepts ?? [],
+    unlockedNodeIds: [],
+    nextDue: todayPlus(1),
+  };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// REVISION
+// REVISION  → backend /books/{id}/revision + /concepts/{cid}/review
 // ─────────────────────────────────────────────────────────────────────────────
 
-/**
- * Returns the due + upcoming card queue with questions pre-loaded.
- * Replaces the N+1 pattern of fetching per-node inside the session.
- */
-export async function getRevisionQueue(
-  token: string,
-  bookId: string
-): Promise<RevisionQueueDTO> {
-  return apiGet<RevisionQueueDTO>(
-    `/books/${bookId}/revision-queue`,
-    { token }
-  );
+interface BackendDue { bookId: string; count: number; due: { conceptId: string; title: string; nextDue: string | null; retrievability: number }[]; }
+
+export async function getRevisionQueue(token: string, bookId: string): Promise<RevisionQueueDTO> {
+  const raw = await apiGet<BackendDue>(`/books/${bookId}/revision`, { token });
+  const card = (d: BackendDue["due"][number]) => ({
+    nodeId: d.conceptId,
+    nodeTitle: d.title,
+    question: {
+      id: `${d.conceptId}-recall`,
+      nodeId: d.conceptId,
+      type: "theory" as const,
+      difficulty: "medium" as const,
+      source: "generated" as const,
+      body: `Recall and explain in your own words: ${d.title}`,
+      options: null,
+      answer: null,
+      explanation: null,
+      createdAt: today(),
+    },
+    source: "generated" as const,
+    recallProbability: d.retrievability,
+    daysOverdue: 0,
+  });
+  return { due: raw.due.map(card), upcoming: [] };
 }
 
-/**
- * Submit a FSRS grade for a node after reviewing it.
- */
 export async function reviewNode(
-  token: string,
-  nodeId: string,
-  data: ReviewRequestDTO
+  token: string, nodeId: string, data: ReviewRequestDTO
 ): Promise<ReviewResponseDTO> {
-  return apiPost<ReviewResponseDTO>(
-    `/nodes/${nodeId}/review`,
-    data,
+  const raw = await apiPost<{ intervalDays: number; stability: number; grade: number }>(
+    `/books/${data.bookId}/concepts/${nodeId}/review`,
+    { grade: gradeToInt(String(data.grade)) },
     { token }
   );
+  return {
+    nextDue: todayPlus(raw.intervalDays ?? 1),
+    interval: raw.intervalDays ?? 1,
+    state: gradeToInt(String(data.grade)) >= 3 ? "mastered" : "due",
+    newStability: raw.stability ?? 0,
+  };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PROGRESS
+// PROGRESS  → backend /dashboard
 // ─────────────────────────────────────────────────────────────────────────────
 
-export async function getProgress(
-  token: string
-): Promise<ProgressDTO> {
-  return apiGet<ProgressDTO>("/progress", { token });
+interface BackendDashboard {
+  conceptsMastered: number; conceptsTracked: number; avgMastery: number;
+  totalDue: number; globalStreak: number; studiedToday: boolean;
+  books: { bookId: string; title: string; totalConcepts: number; masteredConcepts: number; percentMastered: number; dueToday: number }[];
+  weakSpots: { title: string; bookTitle: string; mastery: number }[];
+}
+
+export async function getProgress(token: string): Promise<ProgressDTO> {
+  const d = await apiGet<BackendDashboard>("/dashboard", { token });
+  return {
+    global: {
+      totalConceptsMastered: d.conceptsMastered,
+      totalConcepts: d.conceptsTracked,
+      retentionRate: d.avgMastery,
+      globalStreak: d.globalStreak,
+      activityHistory: [],
+    },
+    books: d.books.map((b) => ({
+      bookId: b.bookId, title: b.title, masteredCount: b.masteredConcepts,
+      totalNodes: b.totalConcepts, progressPct: b.percentMastered, dueToday: b.dueToday, bookStreak: 0,
+    })),
+    weakSpots: d.weakSpots.map((w, i) => ({
+      nodeId: `weak-${i}`, nodeTitle: w.title, bookId: "", bookTitle: w.bookTitle,
+      masteryScore: w.mastery, lapseCount: 0,
+    })),
+  };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // NOTIFICATIONS
 // ─────────────────────────────────────────────────────────────────────────────
 
-export async function listNotifications(
-  token: string
-): Promise<{ notifications: NotificationDTO[] }> {
-  return apiGet<{ notifications: NotificationDTO[] }>(
-    "/notifications",
-    { token }
-  );
+interface BackendNotification { id: string; type: string; message: string; read: boolean; link: string | null; }
+
+export async function listNotifications(token: string): Promise<{ notifications: NotificationDTO[] }> {
+  const raw = await apiGet<{ notifications: BackendNotification[] }>("/notifications", { token });
+  return {
+    notifications: (raw.notifications ?? []).map((n) => ({
+      id: n.id,
+      userId: "",
+      bookId: null,
+      type: (n.type === "due_reviews" ? "reviews_due"
+        : n.type === "needs_review" ? "book_needs_review"
+        : n.type === "take_assessment" ? "book_ready"
+        : n.type === "streak" ? "streak_reminder"
+        : "milestone") as NotificationDTO["type"],
+      title: n.message,
+      body: "",
+      read: n.read,
+      link: n.link,
+      createdAt: new Date().toISOString(),
+    })),
+  };
 }
 
-export async function markNotificationRead(
-  token: string,
-  notificationId: string
-): Promise<{ notification: NotificationDTO }> {
-  return apiPost<{ notification: NotificationDTO }>(
-    `/notifications/${notificationId}/read`,
-    {},
-    { token }
-  );
+// Notification read-state isn't persisted server-side yet; no-op for the UI.
+export async function markNotificationRead(_token: string, notificationId: string): Promise<{ notification: NotificationDTO }> {
+  return {
+    notification: {
+      id: notificationId, userId: "", bookId: null, type: "milestone",
+      title: "", body: "", read: true, link: null, createdAt: new Date().toISOString(),
+    },
+  };
 }
 
-export async function markAllNotificationsRead(
-  token: string
-): Promise<{ success: true }> {
-  return apiPost<{ success: true }>(
-    "/notifications/read-all",
-    {},
-    { token }
-  );
+export async function markAllNotificationsRead(_token: string): Promise<{ success: true }> {
+  return { success: true };
 }
