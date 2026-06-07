@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Sidebar } from "@/components/Sidebar";
+import { Markdown } from "@/components/Markdown";
 import { useSession } from "next-auth/react";
 import { getToken } from "@/lib/auth";
 import { getBook, createSession, sendMessage, completeSession } from "@/lib/api";
@@ -262,7 +263,11 @@ export default function LearnSessionPage() {
                         : "bg-white border border-slate-200 text-slate-800 rounded-bl-sm shadow-sm"
                     }`}
                   >
-                    {m.content}
+                    {m.role === "assistant" ? (
+                      <Markdown>{m.content}</Markdown>
+                    ) : (
+                      m.content
+                    )}
                   </div>
                 </div>
               ))}

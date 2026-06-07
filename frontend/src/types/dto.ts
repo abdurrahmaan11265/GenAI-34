@@ -276,6 +276,8 @@ export interface AssessmentAnswerResponseDTO {
   correct: boolean;
   isMastered: boolean;
   explanation: string | null;
+  correctAnswer: string | null;
+  correctOption: number | null; // MCQ: 0-based index of the correct option
 }
 
 export interface AssessmentCompleteResponseDTO {

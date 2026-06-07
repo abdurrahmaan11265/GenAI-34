@@ -221,12 +221,15 @@ class AssessmentService:
         concept_ids = [str(c.id) for c in concepts]
         nxt = walk.next_question(concept_ids, edges, walk_responses)
 
+        mcq_option = ak.get("correct_option")
         result = ResponseResultDTO(
             is_correct=is_correct,
             correctness=correctness,
             score=score,
             feedback=feedback,
             explanation=question.explanation or "",
+            correct_answer=str(ak.get("expected_answer", "")),
+            correct_option=mcq_option if (question.question_type == "MCQ" and isinstance(mcq_option, int)) else None,
             branch_stopped=branch_stopped,
         )
         progress = self._progress(len(concept_ids), db_responses)

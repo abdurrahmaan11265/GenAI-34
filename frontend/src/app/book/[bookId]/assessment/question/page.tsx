@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Sidebar } from "@/components/Sidebar";
+import { Markdown } from "@/components/Markdown";
 import { useSession } from "next-auth/react";
 import { getToken } from "@/lib/auth";
 import {
@@ -61,6 +62,8 @@ export default function AssessmentQuestionPage() {
   const [submitted, setSubmitted]     = useState(false);
   const [isCorrect, setIsCorrect]     = useState<boolean | null>(null);
   const [explanation, setExplanation] = useState<string | null>(null);
+  const [correctAnswer, setCorrectAnswer] = useState<string | null>(null);
+  const [correctOption, setCorrectOption] = useState<number | null>(null);
   const [branchStop, setBranchStop]   = useState(false);
 
   const [loading, setLoading]         = useState(true);
@@ -100,6 +103,8 @@ export default function AssessmentQuestionPage() {
     setSubmitted(false);
     setIsCorrect(null);
     setExplanation(null);
+    setCorrectAnswer(null);
+    setCorrectOption(null);
     setBranchStop(false);
   }
 
@@ -120,6 +125,8 @@ export default function AssessmentQuestionPage() {
       });
       setIsCorrect(data.correct);
       setExplanation(data.explanation ?? null);
+      setCorrectAnswer(data.correctAnswer ?? null);
+      setCorrectOption(data.correctOption ?? null);
       setBranchStop(!data.isMastered);
     } catch {
       setError("Failed to submit answer.");
@@ -205,9 +212,9 @@ export default function AssessmentQuestionPage() {
                 <Badge variant="info" className="capitalize">{question.type}</Badge>
 
                 {/* Question body */}
-                <p className="text-base font-medium text-slate-900 leading-relaxed">
+                <Markdown className="text-base font-medium text-slate-900">
                   {question.body}
-                </p>
+                </Markdown>
 
                 {/* Confidence selector (shown before submit) */}
                 {!submitted && (
@@ -292,8 +299,22 @@ export default function AssessmentQuestionPage() {
                       >
                         {isCorrect ? "Correct!" : "Not quite."}
                       </p>
+                      {!isCorrect && correctAnswer && (
+                        <div className="mt-2 text-xs">
+                          <span className="font-semibold text-slate-700">Correct answer: </span>
+                          {correctOption !== null && question?.options?.[correctOption] ? (
+                            <span className="text-slate-700">
+                              {String.fromCharCode(65 + correctOption)}. {question.options[correctOption]}
+                            </span>
+                          ) : (
+                            <Markdown className="inline text-slate-700">{correctAnswer}</Markdown>
+                          )}
+                        </div>
+                      )}
                       {explanation && (
-                        <p className="text-xs text-slate-600 mt-1">{explanation}</p>
+                        <div className="text-xs text-slate-600 mt-1">
+                          <Markdown>{explanation}</Markdown>
+                        </div>
                       )}
                       {confidence === "certain" && !isCorrect && (
                         <p className="text-xs text-red-600 mt-1 flex items-center gap-1">

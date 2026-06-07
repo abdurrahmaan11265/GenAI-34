@@ -296,7 +296,7 @@ interface BackendQuestion {
 }
 interface BackendStart { assessment_id: string; question: BackendQuestion | null; progress: { concepts_total: number }; completed: boolean; }
 interface BackendAnswer {
-  result: { is_correct: boolean; correctness: string; score: number; feedback: string; explanation: string; branch_stopped: boolean };
+  result: { is_correct: boolean; correctness: string; score: number; feedback: string; explanation: string; correct_answer: string; correct_option: number | null; branch_stopped: boolean };
   next_question: BackendQuestion | null; progress: { concepts_total: number; concepts_resolved: number }; completed: boolean;
 }
 
@@ -368,6 +368,8 @@ export async function submitAssessmentAnswer(
     correct: raw.result.is_correct,
     isMastered: raw.result.is_correct,
     explanation: raw.result.explanation || raw.result.feedback || null,
+    correctAnswer: raw.result.correct_answer || null,
+    correctOption: raw.result.correct_option ?? null,
   };
 }
 
