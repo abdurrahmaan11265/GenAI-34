@@ -24,7 +24,7 @@ const STATUS_BADGE: Record<
 > = {
   uploaded:    { label: "Uploaded",      color: "secondary" },
   parsing:     { label: "Processing",    color: "info" },
-  kg_built:    { label: "Processing",    color: "info" },
+  kg_built:    { label: "Needs review",  color: "warning" },
   kg_verified: { label: "Needs review",  color: "warning" },
   ready:       { label: "Ready",         color: "success" },
 };
@@ -74,9 +74,11 @@ export default function LibraryPage() {
     return 0; // "recent" — server returns by updatedAt desc
   });
   const getBookAction = (book: BookSummaryDTO) => {
-    if (book.status === "kg_verified") return `/book/${book.id}/verify`;
-    if (book.status === "ready")       return `/book/${book.id}`;
-    if (book.status === "parsing" || book.status === "kg_built")
+    // Graph built (or verified) → human review step.
+    if (book.status === "kg_built" || book.status === "kg_verified")
+      return `/book/${book.id}/verify`;
+    if (book.status === "ready")    return `/book/${book.id}`;
+    if (book.status === "parsing" || book.status === "uploaded")
       return `/book/${book.id}/processing`;
     return `/book/${book.id}`;
   };
@@ -300,14 +302,14 @@ export default function LibraryPage() {
                       </div>
                     )}
 
-                    {(book.status === "parsing" || book.status === "kg_built") && (
+                    {(book.status === "parsing" || book.status === "uploaded") && (
                       <div className="flex items-center gap-2 mt-3 text-xs text-slate-500">
                         <Loader2 className="h-3 w-3 animate-spin" />
                         Building knowledge graph...
                       </div>
                     )}
 
-                    {book.status === "kg_verified" && (
+                    {(book.status === "kg_built" || book.status === "kg_verified") && (
                       <div className="flex items-center gap-1 mt-3 text-xs text-amber-600">
                         <AlertTriangle className="h-3 w-3" />
                         Needs your review
