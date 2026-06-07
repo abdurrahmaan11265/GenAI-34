@@ -210,7 +210,9 @@ CREATE TABLE books (
     source_type VARCHAR(50) NOT NULL
         CHECK (source_type IN ('PDF', 'EPUB', 'TXT', 'DOCX', 'URL')),
 
-    file_url TEXT NOT NULL,
+    -- Nullable: the 2-step upload creates the book row before the file is
+    -- stored, and the source file is deleted after a successful KG build.
+    file_url TEXT,
 
     file_size_bytes BIGINT,
 
@@ -2152,9 +2154,9 @@ CREATE INDEX idx_notifications_unread ON notifications(user_id) WHERE is_read = 
 -- =====================================================
 
 CREATE TYPE upload_status AS ENUM (
-    \'PENDING\',
-    \'STORED\',
-    \'FAILED\'
+    'PENDING',
+    'STORED',
+    'FAILED'
 );
 
 CREATE TABLE book_uploads (
@@ -2165,7 +2167,7 @@ CREATE TABLE book_uploads (
     storage_path TEXT NOT NULL,
     file_size_bytes BIGINT,
     mime_type TEXT,
-    upload_status upload_status NOT NULL DEFAULT \'PENDING\',
+    upload_status upload_status NOT NULL DEFAULT 'PENDING',
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -2222,5 +2224,25 @@ CREATE TABLE graph_audit_events (
     after_value JSONB,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- =====================================================
+-- 12. DAILY PLANS
+-- =====================================================
+-- Persisted per-day "today's focus" set (soft-focus daily plan). The chosen
+-- learn-concepts are frozen for the day and regenerated once all are mastered.
+-- Concept sub-topics are stored in concepts.metadata->'subtopics' (no DDL).
+-- =====================================================
+
+CREATE TABLE daily_plans (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    book_id UUID NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+    plan_date DATE NOT NULL,
+    learn_concept_ids JSONB NOT NULL DEFAULT '[]',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT uq_daily_plan UNIQUE (user_id, book_id, plan_date)
+);
+
+CREATE INDEX idx_daily_plans_user_book ON daily_plans(user_id, book_id, plan_date DESC);
 
 CREATE INDEX idx_graph_audit_events_version ON graph_audit_events(graph_version_id);
