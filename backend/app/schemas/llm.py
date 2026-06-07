@@ -5,6 +5,7 @@ class ConceptCandidate(BaseModel):
     name: str = Field(description="The canonical name of the concept.")
     summary: str = Field(description="A concise definition or explanation of the concept based ONLY on the provided text.")
     difficulty: int = Field(description="Difficulty rating from 1 to 5.")
+    subtopics: List[str] = Field(default_factory=list, description="3-5 short sub-topic titles (2-5 words each) that make up this concept.")
 
 class ConceptExtractionResponse(BaseModel):
     concepts: List[ConceptCandidate]
