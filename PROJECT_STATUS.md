@@ -32,24 +32,25 @@ This document maintains the current state of the Lexis Adaptive Book Learning Pl
   - Idempotent database insertion with advanced conflict handling (`ON CONFLICT DO NOTHING`) across `source_chunks`, `concepts`, and `concept_edges`.
   - Frontend properly polls and displays the real generated Knowledge Graph (D3.js).
 
-## 🎭 Mocked (Working UI, Simulated Backend)
-- **Notifications**:
-  - `GET /api/v1/notifications` exists but returns a static `[]` to allow the React `Promise.all` on the Library page to succeed without crashing.
+## ✅ Learner-Model Backend (branch `feat/assessment-engine`)
+The full P0 learner-model pipeline is implemented backend-to-DB, each engine
+contract-first with unit tests and a golden-dataset eval harness (39 tests pass;
+all 9 GenAI prompt tasks meet their PEOS targets).
+- **Assessment Engine + Learning DNA**: adaptive topological DAG walk (MCQ→theory→applied, branch-stop, confidence), atomic `/complete` seeding `concept_mastery` + `user_concept_state` + Gemini DNA. (`/api/v1/assessments`)
+- **Graph Reveal**: per-user four-state graph overlay. (`GET /books/{id}/knowledge-graph`)
+- **Curriculum + Daily Plan**: deterministic, graph-decided; revise/learn/both. (`/books/{id}/curriculum`, `/daily-plan`)
+- **Lesson + Socratic Tutor + Hints**: Gemini lessons grounded in source chunks; tutor with 0% answer-leakage + misconception capture; completion unlocks dependents via the Progress engine. (`/api/v1/lessons/...`)
+- **Mastery + FSRS + Revision**: canonical mastery engine (`mastery_engine.md`) + FSRS scheduler; due detection + review grading. (`GET /books/{id}/revision`, `POST /books/{id}/concepts/{cid}/review`)
+- **Dashboard / Stats / Streaks**: aggregation + activity-derived streaks. (`GET /dashboard`)
+- **Notifications**: now derived live from learner state (no longer a `[]` stub).
+- **Neo4j projection**: Postgres→Neo4j `PREREQUISITE_OF` / `HAS_MASTERY` / `CURRENTLY_LEARNING` (best-effort). (`POST /books/{id}/graph/sync-neo4j`)
+- **Eval harness**: `backend/evals/` golden datasets + scorers + `python -m evals.run_evals`.
 
 ## 🚧 Incomplete / In Progress
-- **Neo4j Integration** (Optional / Future): 
-  - Basic connector exists (`app/core/neo4j.py`). Currently, graph storage successfully uses PostgreSQL (`concepts` and `concept_edges`).
-- **File Storage**:
-  - Uploaded PDFs are stored in the local file system (`uploads/`). Needs migration to S3-compatible storage bucket for production.
+- **File Storage**: uploaded PDFs stored on local disk (`uploads/`); needs S3 for prod.
+- **Ingestion edge inference is O(n²) Gemini calls** — fine for small books, needs batching before large books.
+- **Frontend** for the new engines (assessment, course view, lesson/tutor, revision, dashboard, graph verification, settings) — APIs are ready to wire.
 
-## 📝 Untouched / Needs to be Done (Roadmap)
-- **Assessment Engine (PR 4)**:
-  - Generate quizzes (multiple choice, true/false) based on the user's current node in the Knowledge Graph.
-  - Store assessment results in the database.
-- **Mastery Engine & FSRS (PR 5)**:
-  - Calculate "Due Today" reviews using the Free Spaced Repetition Scheduler algorithm.
-  - Track confidence intervals and knowledge decay for individual nodes.
-- **Gemini Tutor Chat**:
-  - The interactive sidebar where a user can ask questions and the AI responds using Retrieval-Augmented Generation (RAG) over the Neo4j Knowledge Graph.
-- **Graph Verification UI**:
-  - The screen where users review the AI-extracted knowledge graph (nodes and edges) and approve it before studying.
+## 📝 Known issues for the team
+- **`schema.sql` lines 2154–2176** use escaped quotes (`\'PENDING\'`) → `upload_status` enum + `book_uploads` fail on a fresh apply (patched in dev DB only).
+- **No Alembic migrations yet** — schema changes are manual SQL; this caused dev-DB drift.
