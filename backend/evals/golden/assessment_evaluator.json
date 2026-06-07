@@ -1,0 +1,46 @@
+{
+  "dataset_id": "assessment_evaluator_v1",
+  "task": "assessment_evaluator",
+  "samples": [
+    {
+      "id": "ae1",
+      "concept": "Time Complexity",
+      "question": "What is the worst-case time complexity of quicksort?",
+      "expected_answer": "O(n^2)",
+      "student_answer": "O(n log n)",
+      "gold_label": "incorrect"
+    },
+    {
+      "id": "ae2",
+      "concept": "Time Complexity",
+      "question": "What is the worst-case time complexity of quicksort?",
+      "expected_answer": "O(n^2)",
+      "student_answer": "It's O(n squared) when the pivot is always the smallest or largest element.",
+      "gold_label": "correct"
+    },
+    {
+      "id": "ae3",
+      "concept": "Recursion",
+      "question": "Why does a recursive function need a base case?",
+      "expected_answer": "Without a base case the recursion never terminates and causes a stack overflow.",
+      "student_answer": "So it knows when to stop.",
+      "gold_label": "partial"
+    },
+    {
+      "id": "ae4",
+      "concept": "Variables",
+      "question": "What is a variable?",
+      "expected_answer": "A named storage location that holds a value which can change.",
+      "student_answer": "A named container that stores a value you can read and reassign.",
+      "gold_label": "correct"
+    },
+    {
+      "id": "ae5",
+      "concept": "Pointers",
+      "question": "What does a pointer store?",
+      "expected_answer": "A memory address of another value.",
+      "student_answer": "I don't know.",
+      "gold_label": "incorrect"
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "dataset_id": "concept_extraction_v1",
+  "task": "concept_extraction",
+  "samples": [
+    {
+      "id": "ce1",
+      "text": "A stack is a linear data structure that follows the Last-In-First-Out (LIFO) principle, where the most recently added element is removed first. A queue, by contrast, follows the First-In-First-Out (FIFO) principle, removing the oldest element first. Both are fundamental abstract data types.",
+      "gold_concepts": ["Stack", "Queue"]
+    },
+    {
+      "id": "ce2",
+      "text": "Photosynthesis is the process by which green plants convert light energy into chemical energy stored in glucose. It occurs in the chloroplasts and requires carbon dioxide and water. The light-dependent reactions capture energy from sunlight, while the Calvin cycle uses that energy to fix carbon.",
+      "gold_concepts": ["Photosynthesis", "Calvin Cycle", "Light-Dependent Reactions"]
+    },
+    {
+      "id": "ce3",
+      "text": "Gradient descent is an optimization algorithm that iteratively adjusts parameters to minimize a loss function by moving in the direction of the negative gradient. The learning rate controls the size of each step; too large a learning rate can cause divergence.",
+      "gold_concepts": ["Gradient Descent", "Loss Function", "Learning Rate"]
+    }
+  ]
+}

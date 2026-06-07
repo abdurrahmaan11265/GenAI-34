@@ -1,0 +1,23 @@
+{
+  "dataset_id": "merge_resolution_v1",
+  "task": "merge_resolution",
+  "samples": [
+    {
+      "id": "mr1",
+      "candidates": [
+        {"name": "Big O Notation", "summary": "Describes the upper bound of an algorithm's growth rate.", "difficulty": 3},
+        {"name": "Big-O", "summary": "Asymptotic notation for worst-case time complexity.", "difficulty": 3}
+      ],
+      "gold_canonical_keyword": "Big"
+    },
+    {
+      "id": "mr2",
+      "candidates": [
+        {"name": "Neural Network", "summary": "A model of connected layers of artificial neurons.", "difficulty": 4},
+        {"name": "Artificial Neural Networks", "summary": "Networks of neurons that learn from data.", "difficulty": 4},
+        {"name": "ANN", "summary": "Abbreviation for artificial neural network.", "difficulty": 4}
+      ],
+      "gold_canonical_keyword": "Neural"
+    }
+  ]
+}

@@ -24,7 +24,9 @@ Rules:
    correct. Set correct_option to the 0-based index of the correct option.
 8. If question_type is NOT "MCQ": leave options empty and correct_option null;
    put the model answer in expected_answer.
-9. Return valid JSON only, matching the provided schema.
+9. Reference the concept by its name (or an unambiguous instance of it) in the
+   question text, so the question is unmistakably about THIS concept.
+10. Return valid JSON only, matching the provided schema.
 
 Concept Name:
 {{CONCEPT_NAME}}

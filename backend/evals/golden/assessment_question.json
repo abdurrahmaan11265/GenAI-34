@@ -1,0 +1,30 @@
+{
+  "dataset_id": "assessment_question_v1",
+  "task": "assessment_question_generator",
+  "samples": [
+    {
+      "id": "aq1",
+      "concept_name": "Binary Search",
+      "concept_summary": "An efficient algorithm that finds a target in a sorted array by repeatedly halving the search interval, running in O(log n) time.",
+      "difficulty": "beginner",
+      "bloom_level": "understand",
+      "question_type": "MCQ"
+    },
+    {
+      "id": "aq2",
+      "concept_name": "Recursion",
+      "concept_summary": "A technique where a function calls itself on smaller inputs, requiring a base case to terminate.",
+      "difficulty": "intermediate",
+      "bloom_level": "apply",
+      "question_type": "SHORT_ANSWER"
+    },
+    {
+      "id": "aq3",
+      "concept_name": "Hash Tables",
+      "concept_summary": "A data structure mapping keys to values via a hash function, offering average O(1) lookup but degrading with collisions.",
+      "difficulty": "advanced",
+      "bloom_level": "analyze",
+      "question_type": "SCENARIO"
+    }
+  ]
+}

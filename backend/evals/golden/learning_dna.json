@@ -1,0 +1,31 @@
+{
+  "dataset_id": "learning_dna_v1",
+  "task": "learning_dna_generator",
+  "samples": [
+    {
+      "id": "dna1",
+      "book_title": "Data Structures & Algorithms",
+      "results": [
+        {"concept": "Arrays", "mastery_estimate": 0.92, "placement_state": "MASTERED"},
+        {"concept": "Linked Lists", "mastery_estimate": 0.88, "placement_state": "MASTERED"},
+        {"concept": "Recursion", "mastery_estimate": 0.20, "placement_state": "WEAK"},
+        {"concept": "Dynamic Programming", "mastery_estimate": 0.10, "placement_state": "UNKNOWN"}
+      ],
+      "confidence_summary": "1 concept answered confidently but incorrectly (high-value revision target).",
+      "expected_strength_keywords": ["Arrays", "Linked Lists"],
+      "expected_weakness_keywords": ["Recursion", "Dynamic Programming"]
+    },
+    {
+      "id": "dna2",
+      "book_title": "Intro to Machine Learning",
+      "results": [
+        {"concept": "Linear Regression", "mastery_estimate": 0.85, "placement_state": "MASTERED"},
+        {"concept": "Gradient Descent", "mastery_estimate": 0.40, "placement_state": "LEARNING"},
+        {"concept": "Backpropagation", "mastery_estimate": 0.15, "placement_state": "WEAK"}
+      ],
+      "confidence_summary": "0 concepts answered confidently but incorrectly.",
+      "expected_strength_keywords": ["Linear Regression"],
+      "expected_weakness_keywords": ["Backpropagation"]
+    }
+  ]
+}
