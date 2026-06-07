@@ -35,6 +35,7 @@ import type {
   SendMessageRequestDTO,
   SendMessageResponseDTO,
   SessionDTO,
+  TutorMessageDTO,
   UpdateEdgeDTO,
   UpdateNodeDTO,
   UserDTO,
@@ -413,15 +414,46 @@ export async function completeAssessment(token: string, bookId: string): Promise
 // SESSIONS (Socratic tutor)  → backend /lessons
 // ─────────────────────────────────────────────────────────────────────────────
 
-export async function createSession(token: string, data: CreateSessionDTO): Promise<{ session: SessionDTO }> {
-  const raw = await apiPost<{ sessionId: string; conceptId: string }>(
+interface BackendTurn { turnIndex: number; userMessage: string; assistantMessage: string; hintLevel: number; }
+
+export async function createSession(
+  token: string, data: CreateSessionDTO
+): Promise<{ session: SessionDTO; transcript: TutorMessageDTO[] }> {
+  const raw = await apiPost<{ sessionId: string; conceptId: string; transcript?: BackendTurn[] }>(
     "/lessons", { book_id: data.bookId, concept_id: data.nodeIds[0] }, { token });
+  // Backend resumes an in-progress session and returns its transcript; replay it.
+  const transcript: TutorMessageDTO[] = [];
+  for (const t of raw.transcript ?? []) {
+    transcript.push({ role: "user", content: t.userMessage, timestamp: new Date().toISOString() });
+    transcript.push({ role: "assistant", content: t.assistantMessage, timestamp: new Date().toISOString() });
+  }
   return {
     session: {
       id: raw.sessionId, userId: "", bookId: data.bookId, mode: data.mode,
       nodeIds: data.nodeIds, completedAt: null, createdAt: new Date().toISOString(),
     },
+    transcript,
   };
+}
+
+export interface QuizQuestionDTO {
+  id: string; conceptId: string; questionType: string; questionText: string; options: string[];
+}
+export interface QuizResultDTO {
+  passed: boolean; score: number; unlockedConcepts: string[]; message: string;
+  results: { questionId: string; isCorrect: boolean; correctAnswer: string; explanation: string }[];
+}
+
+export async function generateQuiz(token: string, sessionId: string): Promise<{ questions: QuizQuestionDTO[]; conceptTitle: string }> {
+  const raw = await apiPost<{ questions: QuizQuestionDTO[]; conceptTitle: string }>(
+    `/lessons/${sessionId}/quiz`, {}, { token });
+  return { questions: raw.questions ?? [], conceptTitle: raw.conceptTitle };
+}
+
+export async function gradeQuiz(
+  token: string, sessionId: string, responses: { question_id: string; answer: string }[]
+): Promise<QuizResultDTO> {
+  return apiPost<QuizResultDTO>(`/lessons/${sessionId}/quiz/grade`, { responses }, { token });
 }
 
 export async function sendMessage(

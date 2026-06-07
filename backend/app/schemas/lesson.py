@@ -72,3 +72,48 @@ class CompleteLessonDTO(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
     status: str
     unlockedConcepts: List[str] = Field(alias="unlockedConcepts", default_factory=list)
+
+
+# ---- mastery-check quiz ----------------------------------------------------
+
+class QuizQuestionDTO(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    id: str
+    conceptId: str = Field(alias="conceptId")
+    questionType: str = Field(alias="questionType")
+    questionText: str = Field(alias="questionText")
+    options: List[str] = Field(default_factory=list)
+
+
+class QuizDTO(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    sessionId: str = Field(alias="sessionId")
+    conceptId: str = Field(alias="conceptId")
+    conceptTitle: str = Field(alias="conceptTitle")
+    questions: List[QuizQuestionDTO]
+
+
+class QuizAnswerDTO(BaseModel):
+    question_id: str
+    answer: str
+
+
+class QuizSubmitRequest(BaseModel):
+    responses: List[QuizAnswerDTO]
+
+
+class QuizResultItemDTO(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    questionId: str = Field(alias="questionId")
+    isCorrect: bool = Field(alias="isCorrect")
+    correctAnswer: str = Field(alias="correctAnswer", default="")
+    explanation: str = ""
+
+
+class QuizResultDTO(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    passed: bool
+    score: float
+    results: List[QuizResultItemDTO]
+    unlockedConcepts: List[str] = Field(alias="unlockedConcepts", default_factory=list)
+    message: str = ""

@@ -57,6 +57,20 @@ class LessonRepository:
         r = await self.session.execute(select(LessonSession).where(LessonSession.id == session_id))
         return r.scalars().first()
 
+    async def get_active_session(self, user_id: str, concept_id: str) -> Optional[LessonSession]:
+        """Most recent IN_PROGRESS lesson for this user+concept (for resume)."""
+        r = await self.session.execute(
+            select(LessonSession)
+            .where(
+                LessonSession.user_id == user_id,
+                LessonSession.concept_id == concept_id,
+                LessonSession.status == "IN_PROGRESS",
+            )
+            .order_by(LessonSession.created_at.desc())
+            .limit(1)
+        )
+        return r.scalars().first()
+
     # ---- tutor interactions -------------------------------------------------
 
     async def get_turns(self, session_id: str) -> List[TutorInteraction]:

@@ -12,7 +12,8 @@ import { Sidebar } from "@/components/Sidebar";
 import { Markdown } from "@/components/Markdown";
 import { useSession } from "next-auth/react";
 import { getToken } from "@/lib/auth";
-import { getBook, createSession, sendMessage, completeSession } from "@/lib/api";
+import { getBook, createSession, sendMessage, generateQuiz, gradeQuiz } from "@/lib/api";
+import type { QuizQuestionDTO, QuizResultDTO } from "@/lib/api";
 import type { TutorMessageDTO, KGNodeDetailDTO } from "@/types/dto";
 
 export default function LearnSessionPage() {
@@ -29,10 +30,17 @@ export default function LearnSessionPage() {
   const [sending, setSending]         = useState(false);
   const [questionSaved, setQuestionSaved] = useState(false);
   const [sourceOpen, setSourceOpen]   = useState(false);
-  const [completing, setCompleting]   = useState(false);
   const [completed, setCompleted]     = useState(false);
   const [unlockedNodes, setUnlockedNodes] = useState<string[]>([]);
   const [error, setError]             = useState("");
+
+  // Mastery-check quiz (the gate that earns mastery)
+  const [quizOpen, setQuizOpen]       = useState(false);
+  const [quizLoading, setQuizLoading] = useState(false);
+  const [quizQuestions, setQuizQuestions] = useState<QuizQuestionDTO[]>([]);
+  const [quizAnswers, setQuizAnswers] = useState<Record<string, string>>({});
+  const [quizGrading, setQuizGrading] = useState(false);
+  const [quizResult, setQuizResult]   = useState<QuizResultDTO | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -48,18 +56,21 @@ export default function LearnSessionPage() {
       })
       .catch(() => setError("Failed to load node data."));
 
-    // Create session
+    // Start (or resume) the session. Resuming replays the saved transcript.
     createSession(token, { bookId, mode: "learning", nodeIds: [nodeId] })
-      .then(({ session: s }) => {
+      .then(({ session: s, transcript }) => {
         setSessionId(s.id);
-        // Opening Socratic message
-        setMessages([
-          {
-            role: "assistant",
-            content: `Let's explore this concept together. Before I explain anything — what do you already know or think about this topic? Any initial thoughts or questions?`,
-            timestamp: new Date().toISOString(),
-          },
-        ]);
+        setMessages(
+          transcript.length > 0
+            ? transcript
+            : [
+                {
+                  role: "assistant",
+                  content: `Let's explore this concept together. Before I explain anything — what do you already know or think about this topic? Any initial thoughts or questions?`,
+                  timestamp: new Date().toISOString(),
+                },
+              ]
+        );
       })
       .catch(() => setError("Failed to start session. Is the backend running?"));
   }, [bookId, nodeId, session]);
@@ -121,21 +132,49 @@ export default function LearnSessionPage() {
     }
   };
 
-  const complete = async () => {
+  const startQuiz = async () => {
     if (!sessionId) return;
-    setCompleting(true);
+    setQuizLoading(true);
+    setQuizResult(null);
+    setQuizAnswers({});
     const token = getToken(session);
-
     try {
-      const data = await completeSession(token, sessionId);
-      setUnlockedNodes(data.unlockedNodes ?? []);
-      setCompleted(true);
+      const { questions } = await generateQuiz(token, sessionId);
+      setQuizQuestions(questions);
+      setQuizOpen(true);
     } catch {
-      alert("Failed to complete session.");
+      alert("Failed to start the quiz. Try again.");
     } finally {
-      setCompleting(false);
+      setQuizLoading(false);
     }
   };
+
+  const submitQuiz = async () => {
+    if (!sessionId) return;
+    setQuizGrading(true);
+    const token = getToken(session);
+    try {
+      const responses = quizQuestions.map((q) => ({
+        question_id: q.id,
+        answer: quizAnswers[q.id] ?? "",
+      }));
+      const result = await gradeQuiz(token, sessionId, responses);
+      setQuizResult(result);
+      if (result.passed) {
+        setUnlockedNodes(result.unlockedConcepts ?? []);
+        setQuizOpen(false);
+        setCompleted(true);
+      }
+    } catch {
+      alert("Failed to grade the quiz. Try again.");
+    } finally {
+      setQuizGrading(false);
+    }
+  };
+
+  const quizCanSubmit =
+    quizQuestions.length > 0 &&
+    quizQuestions.every((q) => (quizAnswers[q.id] ?? "").trim().length > 0);
 
   const sourceChunks = node?.sourceChunks ?? [];
 
@@ -180,15 +219,15 @@ export default function LearnSessionPage() {
               id="btn-complete-node"
               variant="success"
               size="sm"
-              onClick={complete}
-              disabled={completing || completed || !sessionId}
+              onClick={startQuiz}
+              disabled={quizLoading || completed || !sessionId}
             >
-              {completing ? (
+              {quizLoading ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
                 <CheckCircle className="h-4 w-4" />
               )}
-              I&apos;ve got this
+              Check my understanding
             </Button>
             <button
               onClick={() => router.push(`/book/${bookId}/course`)}
@@ -198,6 +237,100 @@ export default function LearnSessionPage() {
             </button>
           </div>
         </div>
+
+        {/* Mastery-check quiz */}
+        {quizOpen && (
+          <div className="absolute inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto">
+            <Card className="max-w-2xl w-full shadow-2xl my-8">
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between mb-1">
+                  <h2 className="text-lg font-bold text-slate-900">Quick mastery check</h2>
+                  <button onClick={() => setQuizOpen(false)} className="text-slate-400 hover:text-slate-600">
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+                <p className="text-sm text-slate-500 mb-4">
+                  Answer these to prove you&apos;ve got it — you&apos;ll only unlock what&apos;s next if you pass.
+                </p>
+
+                <div className="space-y-5 max-h-[55vh] overflow-y-auto pr-1">
+                  {quizQuestions.map((q, idx) => {
+                    const res = quizResult?.results.find((r) => r.questionId === q.id);
+                    return (
+                      <div key={q.id} className="border-b border-slate-100 pb-4 last:border-0">
+                        <div className="flex items-start gap-2 mb-2">
+                          <Badge variant="info" className="text-[10px] shrink-0 mt-0.5">{idx + 1}</Badge>
+                          <div className="text-sm font-medium text-slate-900 flex-1"><Markdown>{q.questionText}</Markdown></div>
+                        </div>
+                        {q.options.length > 0 ? (
+                          <div className="space-y-1.5">
+                            {q.options.map((opt, i) => (
+                              <button
+                                key={i}
+                                disabled={!!quizResult}
+                                onClick={() => setQuizAnswers((a) => ({ ...a, [q.id]: String(i) }))}
+                                className={`w-full text-left px-3 py-2 rounded-lg border text-sm transition-all ${
+                                  quizAnswers[q.id] === String(i)
+                                    ? "border-indigo-500 bg-indigo-50 text-indigo-700"
+                                    : "border-slate-200 hover:border-slate-300"
+                                }`}
+                              >
+                                <span className="font-medium mr-2">{String.fromCharCode(65 + i)}.</span>{opt}
+                              </button>
+                            ))}
+                          </div>
+                        ) : (
+                          <textarea
+                            value={quizAnswers[q.id] ?? ""}
+                            disabled={!!quizResult}
+                            onChange={(e) => setQuizAnswers((a) => ({ ...a, [q.id]: e.target.value }))}
+                            placeholder="Type your answer..."
+                            rows={3}
+                            className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+                          />
+                        )}
+                        {res && !res.isCorrect && (
+                          <div className="mt-2 text-xs text-slate-600">
+                            <span className="font-semibold text-red-600">Expected: </span>
+                            <Markdown className="inline">{res.correctAnswer}</Markdown>
+                          </div>
+                        )}
+                        {res && (
+                          <p className={`text-xs mt-1 font-medium ${res.isCorrect ? "text-emerald-600" : "text-red-500"}`}>
+                            {res.isCorrect ? "Correct" : "Incorrect"}
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {quizResult && !quizResult.passed && (
+                  <div className="mt-4 bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-700">
+                    {quizResult.message} (score {Math.round(quizResult.score * 100)}%)
+                  </div>
+                )}
+
+                <div className="flex gap-3 mt-5">
+                  {!quizResult ? (
+                    <Button className="flex-1" onClick={submitQuiz} disabled={!quizCanSubmit || quizGrading}>
+                      {quizGrading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Submit quiz"}
+                    </Button>
+                  ) : (
+                    <>
+                      <Button variant="outline" className="flex-1" onClick={() => setQuizOpen(false)}>
+                        Keep learning
+                      </Button>
+                      <Button className="flex-1" onClick={startQuiz} disabled={quizLoading}>
+                        {quizLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Try again"}
+                      </Button>
+                    </>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
 
         {/* Completion overlay */}
         {completed && (

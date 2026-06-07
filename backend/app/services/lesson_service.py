@@ -61,6 +61,19 @@ class LessonService:
         if not concept or str(concept.book_id) != book_id:
             raise HTTPException(status_code=404, detail="Concept not found for this book.")
 
+        # Resume an in-progress lesson if one exists (sessions are persistent):
+        # reuse the generated content + transcript instead of regenerating.
+        existing = await self.repo.get_active_session(user_id, concept_id)
+        if existing is not None:
+            turns = await self.repo.get_turns(str(existing.id))
+            return LessonSessionDTO(
+                sessionId=str(existing.id), conceptId=concept_id, conceptTitle=concept.name,
+                status=existing.status, content=self._content_dto(existing.generated_content or {}),
+                transcript=[TurnDTO(turnIndex=t.turn_index, userMessage=t.user_message,
+                                    assistantMessage=t.assistant_message, hintLevel=t.hint_level)
+                            for t in turns],
+            )
+
         source_text = await self.repo.get_source_text(concept_id)
         mastery = await self.repo.get_mastery(user_id, concept_id)
         lesson = await self.llm.generate_lesson(
@@ -148,14 +161,75 @@ class LessonService:
         return HintDTO(hintLevel=out.hint_level or hint_level, hint=out.hint, reason=out.reason)
 
     async def complete_lesson(self, user_id: str, session_id: str) -> CompleteLessonDTO:
+        """End/pause the teaching session. Does NOT grant mastery — mastery is
+        earned only by passing the mastery-check quiz (AGENT.md: mastery is not
+        self-declared)."""
         sess = await self._load_session_owned(user_id, session_id)
-        if sess.status == "COMPLETED":
-            # idempotent
-            return CompleteLessonDTO(status="COMPLETED", unlockedConcepts=[])
-        concept = await self.repo.get_concept(str(sess.concept_id))
-        sess.status = "COMPLETED"
-        sess.completed_at = datetime.now(timezone.utc)
+        if sess.status != "COMPLETED":
+            sess.status = "COMPLETED"
+            sess.completed_at = datetime.now(timezone.utc)
+        return CompleteLessonDTO(status="COMPLETED", unlockedConcepts=[])
 
-        progress = ProgressService(self.graph, self.assess)
-        unlocked = await progress.complete_concept(user_id, str(concept.book_id), str(sess.concept_id), source="LESSON")
-        return CompleteLessonDTO(status="COMPLETED", unlockedConcepts=unlocked)
+    # ---- mastery-check quiz (the gate that earns mastery) -------------------
+
+    QUIZ_TIERS = ["MCQ", "SHORT_ANSWER", "SCENARIO"]   # current + a bit beyond
+    QUIZ_PASS_THRESHOLD = 0.6                          # average score to pass
+
+    def _assessment(self):
+        # Reuse the assessment engine's question generation + grading.
+        from app.services.assessment_service import AssessmentService
+        return AssessmentService(self.assess)
+
+    async def generate_quiz(self, user_id: str, session_id: str):
+        from app.schemas.lesson import QuizDTO, QuizQuestionDTO
+        sess = await self._load_session_owned(user_id, session_id)
+        concept = await self.repo.get_concept(str(sess.concept_id))
+        if not concept:
+            raise HTTPException(status_code=404, detail="Concept not found.")
+        eng = self._assessment()
+        questions = []
+        for tier in self.QUIZ_TIERS:
+            q = await eng._generate_and_store_question(concept, tier)
+            ak = q.answer_key or {}
+            questions.append(QuizQuestionDTO(
+                id=str(q.id), conceptId=str(concept.id), questionType=q.question_type,
+                questionText=q.question_text, options=list(ak.get("options") or []),
+            ))
+        return QuizDTO(sessionId=session_id, conceptId=str(concept.id),
+                       conceptTitle=concept.name, questions=questions)
+
+    async def grade_quiz(self, user_id: str, session_id: str, responses: list):
+        from app.schemas.lesson import QuizResultDTO, QuizResultItemDTO
+        sess = await self._load_session_owned(user_id, session_id)
+        concept = await self.repo.get_concept(str(sess.concept_id))
+        eng = self._assessment()
+
+        items, scores = [], []
+        for r in responses:
+            question = await self.assess.get_question(r.question_id)
+            if question is None:
+                continue
+            ak = question.answer_key or {}
+            is_correct, correctness, score, feedback = await eng._grade(question, concept, r.answer, ak)
+            scores.append(score)
+            items.append(QuizResultItemDTO(
+                questionId=r.question_id, isCorrect=is_correct,
+                correctAnswer=str(ak.get("expected_answer", "")),
+                explanation=question.explanation or "",
+            ))
+
+        avg = sum(scores) / len(scores) if scores else 0.0
+        passed = avg >= self.QUIZ_PASS_THRESHOLD
+        unlocked: list = []
+        if passed:
+            sess.status = "COMPLETED"
+            sess.completed_at = datetime.now(timezone.utc)
+            progress = ProgressService(self.graph, self.assess)
+            unlocked = await progress.complete_concept(
+                user_id, str(concept.book_id), str(concept.id), source="QUIZ")
+        return QuizResultDTO(
+            passed=passed, score=round(avg, 2), results=items,
+            unlockedConcepts=unlocked,
+            message=("Passed — concept mastered!" if passed
+                     else "Not yet — review the explanations and try again."),
+        )

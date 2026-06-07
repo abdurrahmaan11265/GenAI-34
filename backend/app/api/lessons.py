@@ -8,7 +8,7 @@ from app.repositories.assessment_repo import AssessmentRepository
 from app.services.lesson_service import LessonService
 from app.schemas.lesson import (
     StartLessonRequest, LessonSessionDTO, TutorRequest, TutorResponseDTO,
-    HintRequest, HintDTO, CompleteLessonDTO,
+    HintRequest, HintDTO, CompleteLessonDTO, QuizDTO, QuizSubmitRequest, QuizResultDTO,
 )
 
 router = APIRouter(prefix="/lessons", tags=["Lessons"])
@@ -70,5 +70,31 @@ async def complete_lesson(
     session: AsyncSession = Depends(get_db),
 ):
     result = await service.complete_lesson(user_id, session_id)
+    await session.commit()
+    return result
+
+
+@router.post("/{session_id}/quiz", response_model=QuizDTO, status_code=201)
+async def generate_quiz(
+    session_id: str,
+    user_id: str = Depends(get_current_user_id),
+    service: LessonService = Depends(get_lesson_service),
+    session: AsyncSession = Depends(get_db),
+):
+    result = await service.generate_quiz(user_id, session_id)
+    await session.commit()
+    return result
+
+
+@router.post("/{session_id}/quiz/grade", response_model=QuizResultDTO)
+async def grade_quiz(
+    session_id: str,
+    data: QuizSubmitRequest,
+    user_id: str = Depends(get_current_user_id),
+    service: LessonService = Depends(get_lesson_service),
+    session: AsyncSession = Depends(get_db),
+):
+    # Mastery is granted (and dependents unlocked) only if the quiz is passed.
+    result = await service.grade_quiz(user_id, session_id, data.responses)
     await session.commit()
     return result
