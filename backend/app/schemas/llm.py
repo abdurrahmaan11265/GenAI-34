@@ -70,3 +70,32 @@ class LearningDNAOutput(BaseModel):
     recommended_focus_areas: List[DNAFocusArea] = Field(default_factory=list)
     confidence_profile: str = Field(default="", description="Narrative summary of confidence calibration.")
     learning_path_explanation: str = Field(default="", description="2-4 sentence narrative of the learner's starting point.")
+
+
+class LessonOutput(BaseModel):
+    """Output of the lesson_generator prompt (pls2 #7)."""
+    introduction: str = Field(default="")
+    mental_model: str = Field(default="")
+    core_explanation: str = Field(default="")
+    analogy: str = Field(default="")
+    worked_examples: List[str] = Field(default_factory=list)
+    common_mistakes: List[str] = Field(default_factory=list)
+    practice_exercises: List[str] = Field(default_factory=list)
+    summary: str = Field(default="")
+    key_takeaways: List[str] = Field(default_factory=list)
+
+
+class TutorOutput(BaseModel):
+    """Output of the socratic_tutor prompt (pls3 #10)."""
+    tutor_response: str = Field(default="")
+    follow_up_question: str = Field(default="")
+    hint: str = Field(default="")
+    reasoning_prompt: str = Field(default="")
+    misconceptions_detected: List[str] = Field(default_factory=list)
+
+
+class HintOutput(BaseModel):
+    """Output of the hint_generator prompt (pls3 #11)."""
+    hint_level: int = Field(default=1)
+    hint: str = Field(default="")
+    reason: str = Field(default="")

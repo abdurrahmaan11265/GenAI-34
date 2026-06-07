@@ -124,14 +124,15 @@ class AssessmentRepository:
     # ---- mastery + node state (learner model writers) -----------------------
 
     async def upsert_concept_mastery(self, user_id: str, concept_id: str,
-                                     mastery_score: float, mastery_state: str) -> None:
+                                     mastery_score: float, mastery_state: str,
+                                     source: str = "ASSESSMENT") -> None:
         now = datetime.now(timezone.utc)
         first_mastered = now if mastery_state == "MASTERED" else None
         set_ = {
             "mastery_score": mastery_score,
             "mastery_state": mastery_state,
             "last_reviewed_at": now,
-            "updated_by_source": "ASSESSMENT",
+            "updated_by_source": source,
         }
         # Only stamp first_mastered_at when transitioning into MASTERED and not set.
         if mastery_state == "MASTERED":
@@ -145,7 +146,7 @@ class AssessmentRepository:
             mastery_state=mastery_state,
             first_mastered_at=first_mastered,
             last_reviewed_at=now,
-            updated_by_source="ASSESSMENT",
+            updated_by_source=source,
         ).on_conflict_do_update(
             constraint="uq_user_concept_mastery",
             set_=set_,

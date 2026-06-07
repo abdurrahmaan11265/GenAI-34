@@ -7,3 +7,4 @@ from app.models.assessment import Assessment, AssessmentResponse, AssessmentOutc
 from app.models.mastery import UserConceptState, ConceptMastery
 from app.models.learner import LearnerProfile, LearningDNA
 from app.models.curriculum import CurriculumPlan
+from app.models.lesson import LessonSession, TutorInteraction
