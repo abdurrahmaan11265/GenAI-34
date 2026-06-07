@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
     const data = await res.json();
 
     if (!res.ok) {
-      let errorMsg = data.error ?? "Registration failed";
+      let errorMsg = (typeof data.error === "string" ? data.error : data.error?.message) ?? "Registration failed";
       if (data.detail) {
         if (Array.isArray(data.detail)) {
           errorMsg = data.detail.map((e: any) => e.msg).join(", ");

@@ -27,7 +27,7 @@ export default function AuthPage() {
           body: JSON.stringify(form),
         });
         const data = await res.json();
-        if (!res.ok) { setError(data.error || "Registration failed"); setLoading(false); return; }
+        if (!res.ok) { setError(typeof data.error === "string" ? data.error : data.error?.message ?? "Registration failed"); setLoading(false); return; }
       }
 
       const result = await signIn("credentials", {

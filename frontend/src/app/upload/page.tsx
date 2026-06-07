@@ -75,8 +75,9 @@ export default function UploadPage() {
       router.push(`/book/${book.id}/processing`);
     } catch (err) {
       if (err instanceof ApiError) {
-        const body = err.body as { detail?: string; error?: string } | undefined;
-        setError(body?.detail ?? body?.error ?? `Upload failed (${err.status})`);
+        const body = err.body as { detail?: string; error?: string | { message?: string } } | undefined;
+        const errMsg = typeof body?.error === "string" ? body.error : (body?.error as any)?.message;
+        setError(body?.detail ?? errMsg ?? `Upload failed (${err.status})`);
       } else {
         setError("Upload failed — is the backend running?");
       }
