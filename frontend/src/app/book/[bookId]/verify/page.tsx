@@ -82,7 +82,11 @@ export default function GraphVerifyPage() {
 
   const loadGraph = useCallback(async () => {
     const token = getToken(session);
-    if (!token) return;
+     if (!token) {
+      setLoading(false);
+      setError("You must be logged in to view this page.");
+      return;
+    }
     setLoading(true);
     try {
       const [graph, { book }] = await Promise.all([
