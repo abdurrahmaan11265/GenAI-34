@@ -399,7 +399,6 @@ For single-node VPS deployment, the provided `docker-compose.yml` serves as a pr
 # Known Limitations
 
 - **File Storage Constraints**: Uploads currently utilize a stateful `LocalStorageProvider` written to the container's `/uploads` directory. A container restart will lose pending unprocessed PDFs. S3 integration is required.
-- **Graph Editing**: The generated knowledge graph is immutable once published. Human-in-the-loop chat interfaces for editing edges are not yet implemented.
 - **Observability Deficit**: Lack of `structlog` and APM integration makes tracing distributed LLM latency difficult.
 - **Gemini Costs**: Real-time interactions in the Socratic Tutor are synchronous API calls, subject to latency spikes and quota exhaustion on free tiers.
 
