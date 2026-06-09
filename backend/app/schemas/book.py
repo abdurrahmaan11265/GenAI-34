@@ -42,6 +42,14 @@ class BookStatusDTO(BaseModel):
     estimated_seconds_remaining: Optional[int] = Field(alias="estimatedSecondsRemaining", default=None)
     error: Optional[str] = None
 
+DIFFICULTY_MAPPING = {
+    1: "beginner",
+    2: "beginner",
+    3: "intermediate",
+    4: "advanced",
+    5: "advanced"
+}
+
 class KGNodeDTO(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
     id: str
@@ -49,7 +57,7 @@ class KGNodeDTO(BaseModel):
     title: str
     summary: str
     sourceChunks: List[str] = Field(alias="sourceChunks")
-    difficultyTier: int = Field(alias="difficultyTier")
+    difficultyTier: str = Field(alias="difficultyTier")
     orderIndex: int = Field(alias="orderIndex")
     sectionName: Optional[str] = Field(alias="sectionName", default=None)
     createdAt: str = Field(alias="createdAt")

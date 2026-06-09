@@ -23,6 +23,7 @@ import json
 import logging
 import math
 import uuid
+from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy import text
@@ -409,6 +410,34 @@ class IngestionOrchestrator:
                 if ex_row:
                     resolved["id"] = str(ex_row[0])
             canonical_concepts.append(resolved)
+
+            # Preserve lineage: link the canonical concept back to all source chunks that formed it
+            source_chunk_ids = {c.get("source_chunk_id") for c in cluster if c.get("source_chunk_id")}
+            for chunk_id in source_chunk_ids:
+                await db.execute(
+                    text("""
+                        INSERT INTO concept_chunks (id, concept_id, chunk_id, relevance_score)
+                        VALUES (:id, :concept_id, :chunk_id, 1.0)
+                        ON CONFLICT DO NOTHING
+                    """),
+                    {"id": str(uuid.uuid4()), "concept_id": resolved["id"], "chunk_id": str(chunk_id)},
+                )
+            
+            # Update raw_concepts lineage
+            raw_concept_ids = [c["id"] for c in cluster]
+            if raw_concept_ids:
+                await db.execute(
+                    text("""
+                        UPDATE raw_concepts 
+                        SET canonical_concept_id = :can_id, canonicalized_at = :now
+                        WHERE id = ANY(:raw_ids)
+                    """),
+                    {
+                        "can_id": resolved["id"],
+                        "now": datetime.utcnow(),
+                        "raw_ids": raw_concept_ids
+                    }
+                )
 
         await db.commit()
         logger.info(f"Canonicalization done — {len(canonical_concepts)} canonical concepts")

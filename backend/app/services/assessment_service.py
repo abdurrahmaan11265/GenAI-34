@@ -129,6 +129,19 @@ class AssessmentService:
             for r in db_responses
         ]
 
+    async def _get_blocked_concepts(self, book_id: str, walk_responses) -> set[str]:
+        grouped = walk._group_responses(walk_responses)
+        failed = walk.failed_mcq(grouped)
+        if not failed:
+            return set()
+            
+        from app.repositories.neo4j_repo import Neo4jRepository
+        neo4j_repo = Neo4jRepository()
+        descendants = await neo4j_repo.get_descendants(book_id, list(failed))
+        
+        blocked = set(descendants)
+        return blocked
+
     # ---- public API ---------------------------------------------------------
 
     async def start_assessment(self, user_id: str, book_id: str) -> StartAssessmentResponse:
@@ -162,8 +175,9 @@ class AssessmentService:
                 q = await self.repo.get_question(qid)
                 qtype_by_id[qid] = q.question_type if q else "MCQ"
         walk_responses = self._to_walk_responses(db_responses, qtype_by_id)
+        blocked = await self._get_blocked_concepts(book_id, walk_responses)
 
-        nxt = walk.next_question(concept_ids, edges, walk_responses)
+        nxt = walk.next_question(concept_ids, edges, walk_responses, blocked)
         if nxt is None:
             # Nothing left to ask (degenerate graph or already fully walked).
             return StartAssessmentResponse(
@@ -232,9 +246,10 @@ class AssessmentService:
                 if q:
                     qtype_by_id[qid] = q.question_type
         walk_responses = self._to_walk_responses(db_responses, qtype_by_id)
+        blocked = await self._get_blocked_concepts(str(assessment.book_id), walk_responses)
 
         concept_ids = [str(c.id) for c in concepts]
-        nxt = walk.next_question(concept_ids, edges, walk_responses)
+        nxt = walk.next_question(concept_ids, edges, walk_responses, blocked)
 
         mcq_option = ak.get("correct_option")
         result = ResponseResultDTO(
@@ -319,8 +334,9 @@ class AssessmentService:
                 q = await self.repo.get_question(qid)
                 qtype_by_id[qid] = q.question_type if q else "MCQ"
         walk_responses = self._to_walk_responses(db_responses, qtype_by_id)
+        blocked = await self._get_blocked_concepts(str(assessment.book_id), walk_responses)
 
-        outcomes = walk.compute_outcomes(concept_ids, edges, walk_responses)
+        outcomes = walk.compute_outcomes(concept_ids, edges, walk_responses, blocked)
 
         # 1-2. Seed assessment_outcomes + concept_mastery + user_concept_state.
         for o in outcomes:

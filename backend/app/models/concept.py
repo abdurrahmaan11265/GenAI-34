@@ -17,18 +17,13 @@ class Concept(Base):
     
             ForeignKeyConstraint(['book_id'], ['books.id'], ondelete='CASCADE', name='concepts_book_id_fkey'),
     
-            ForeignKeyConstraint(['canonical_concept_id'], ['concepts.id'], ondelete='SET NULL', name='concepts_canonical_concept_id_fkey'),
-    
             ForeignKeyConstraint(['chapter_id'], ['chapters.id'], ondelete='SET NULL', name='concepts_chapter_id_fkey'),
     
             PrimaryKeyConstraint('id', name='concepts_pkey'),
     
             UniqueConstraint('book_id', 'name', 'graph_version', name='uq_concept_book_name_version'),
     
-            Index('idx_concepts_book', 'book_id'),
-    
-            Index('idx_concepts_canonical', 'canonical_concept_id'),
-    
+            Index('idx_concepts_book', 'book_id'),    
             Index('idx_concepts_chapter', 'chapter_id'),
     
             Index('idx_concepts_difficulty', 'difficulty_level'),
@@ -51,7 +46,7 @@ class Concept(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     book_id = Column(UUID(as_uuid=True), ForeignKey("books.id", ondelete="CASCADE"), nullable=False)
     chapter_id = Column(UUID(as_uuid=True), nullable=True)
-    canonical_concept_id = Column(UUID(as_uuid=True), nullable=True)
+
     name = Column(Text, nullable=False)
     summary = Column(Text, nullable=False)
     learning_objective = Column(Text, nullable=True)
@@ -137,6 +132,8 @@ class RawConcept(Base):
     summary = Column(Text, nullable=False)
     difficulty_level = Column(Integer, nullable=False)
     subtopics = Column(JSONB, nullable=False, default=list)
+    canonical_concept_id = Column(UUID(as_uuid=True), ForeignKey("concepts.id", ondelete="SET NULL"), nullable=True)
+    canonicalized_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 

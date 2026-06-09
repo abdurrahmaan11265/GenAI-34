@@ -20,8 +20,7 @@ from app.repositories.fsrs_repo import FsrsRepository
 from app.services import fsrs as fsrs_engine
 from app.services import mastery_engine
 
-MASTERY_ON_LESSON_COMPLETE = 0.9
-MASTERED_THRESHOLD = 0.85
+
 
 
 class ProgressService:
@@ -39,9 +38,59 @@ class ProgressService:
         if gv is None:
             return []
 
-        # Write mastery + node state for the completed concept.
-        await self.repo.upsert_concept_mastery(user_id, concept_id, MASTERY_ON_LESSON_COMPLETE, "MASTERED", source=source)
-        await self.repo.upsert_node_state(user_id, concept_id, gv, "MASTERED")
+        # 1. Deduplication Guard: Check content_completions
+        bonus_awarded = False
+        row = await self.fsrs.session.execute(
+            text("""
+                SELECT 1 FROM content_completions 
+                WHERE user_id = :u AND content_type = 'concept' 
+                  AND content_id = :c AND content_version = :v
+            """),
+            {"u": user_id, "c": concept_id, "v": gv}
+        )
+        if row.first():
+            bonus_awarded = True
+
+        # 2. Get prior state
+        prev_m, prev_r = await self._current_state(user_id, concept_id)
+
+        # 3. Call Mastery Engine
+        event_name = "lesson_complete" if source == "LESSON" else "quiz_complete"
+        result = mastery_engine.update_mastery(
+            mastery=prev_m,
+            retention=prev_r,
+            event=event_name,
+            hint_used=False,
+            bonus_eligible=not bonus_awarded
+        )
+
+        # 4. Persist Bonus if awarded
+        if result.bonus_awarded:
+            await self.fsrs.session.execute(
+                text("""
+                    INSERT INTO content_completions (user_id, content_type, content_id, content_version)
+                    VALUES (:u, 'concept', :c, :v)
+                    ON CONFLICT DO NOTHING
+                """),
+                {"u": user_id, "c": concept_id, "v": gv}
+            )
+
+        # 5. Routing -> Node State
+        if result.routing == "unlock_dependents":
+            mastery_state = "MASTERED"
+            node_state = "MASTERED"
+        elif result.routing in ("practice", "continue"):
+            mastery_state = "PRACTICING" if result.routing == "practice" else "LEARNING"
+            node_state = "IN_PROGRESS"
+        else:
+            mastery_state = "LEARNING"
+            node_state = "AVAILABLE"
+
+        await self.repo.upsert_concept_mastery(
+            user_id, concept_id, result.mastery, mastery_state, 
+            source=source, retention_score=result.retention
+        )
+        await self.repo.upsert_node_state(user_id, concept_id, gv, node_state)
 
         # Recompute the mastered set and unlock dependents.
         concepts = await self.graph.concepts(book_id, gv)
@@ -55,7 +104,7 @@ class ProgressService:
 
         mastered = {str(c.id) for c in concepts
                     if states.get(str(c.id)) == "MASTERED"
-                    or masteries.get(str(c.id), 0.0) >= MASTERED_THRESHOLD}
+                    or masteries.get(str(c.id), 0.0) >= mastery_engine.MASTERY_THRESHOLD}
         mastered.add(concept_id)
 
         unlocked: List[str] = []
@@ -92,18 +141,32 @@ class ProgressService:
         await self.fsrs.log_review(user_id, concept_id, grade, before, after, source="REVISION")
 
         # Mastery update via the canonical mastery engine.
-        prev_m = await self._current_mastery(user_id, concept_id)
+        prev_m, prev_r = await self._current_state(user_id, concept_id)
         event = "correct" if grade >= fsrs_engine.GRADE_GOOD else "wrong"
-        result = mastery_engine.update_mastery(prev_m, prev_m, event)
-        new_state = "MASTERED" if result.mastery >= mastery_engine.MASTERY_THRESHOLD else "PRACTICING"
-        await self.repo.upsert_concept_mastery(user_id, concept_id, result.mastery, new_state, source="REVISION")
-        await self.fsrs.log_mastery_event(user_id, concept_id, "REVISION", prev_m, result.mastery,
-                                          f"revision grade {grade}")
+        result = mastery_engine.update_mastery(prev_m, prev_r, event)
+        
+        if result.routing == "unlock_dependents":
+            mastery_state = "MASTERED"
+            node_state = "MASTERED"
+        elif result.routing in ("practice", "continue"):
+            mastery_state = "PRACTICING" if result.routing == "practice" else "LEARNING"
+            node_state = "IN_PROGRESS" if grade >= fsrs_engine.GRADE_GOOD else "DUE"
+        else:
+            mastery_state = "LEARNING"
+            node_state = "DUE"
 
-        # Node state: recalled -> back to MASTERED; failed -> stays DUE for retry.
+        await self.repo.upsert_concept_mastery(
+            user_id, concept_id, result.mastery, mastery_state, 
+            source="REVISION", retention_score=result.retention
+        )
+        await self.fsrs.log_mastery_event(
+            user_id, concept_id, "REVISION", prev_m, result.mastery,
+            f"revision grade {grade}"
+        )
+
+        # Node state updated based on routing.
         if gv is not None:
-            await self.repo.upsert_node_state(
-                user_id, concept_id, gv, "MASTERED" if grade >= fsrs_engine.GRADE_GOOD else "DUE")
+            await self.repo.upsert_node_state(user_id, concept_id, gv, node_state)
 
         return {
             "concept_id": concept_id, "grade": grade,
@@ -111,9 +174,9 @@ class ProgressService:
             "stability": after.stability, "difficulty": after.difficulty,
         }
 
-    async def _current_mastery(self, user_id: str, concept_id: str) -> float:
+    async def _current_state(self, user_id: str, concept_id: str) -> tuple[float, float]:
         row = await self.fsrs.session.execute(
-            text("SELECT mastery_score FROM concept_mastery WHERE user_id = :u AND concept_id = :c"),
+            text("SELECT mastery_score, retention_score FROM concept_mastery WHERE user_id = :u AND concept_id = :c"),
             {"u": user_id, "c": concept_id})
         r = row.first()
-        return float(r[0]) if r else 0.0
+        return (float(r[0]), float(r[1])) if r else (0.0, 0.0)

@@ -1,4 +1,4 @@
-﻿# Lexis AI â€” Ingestion Pipeline Architecture
+# Lexis AI â€” Ingestion Pipeline Architecture
 
 **Document Type:** System Architecture  
 **Status:** Draft for Engineering Review  
@@ -511,6 +511,15 @@ The `graph_versions` record carries:
 - `neo4j_graph_id` â€” set after publication
 - `published_at` â€” set after publication
 - `archived_at` â€” set when superseded
+- `book_id` — parent book
+- `version_number` — monotonically increasing integer per book
+- `status` — `DRAFT | VALIDATING | PENDING_REVIEW | APPROVED | PUBLISHED | ARCHIVED | FAILED`
+- `node_count` — concept count (cached for quick display)
+- `edge_count` — relationship count (cached)
+- `build_job_id` — the job that produced this version
+- `neo4j_graph_id` — set after publication
+- `published_at` — set after publication
+- `archived_at` — set when superseded
 
 ### 9.5 Stable IDs Across Versions
 
@@ -524,12 +533,12 @@ The validator runs a fixed suite of deterministic checks. Each check is independ
 
 ### 10.1 Validation Rules
 
-**V01 â€” No Cycles in REQUIRES Graph**
+**V01 — No Cycles in REQUIRES Graph**
 - Purpose: The prerequisite graph must be a DAG. Cycles mean "A requires B requires A", which is semantically invalid and causes infinite loops in learning path generation.
 - Implementation: Depth-first search with color marking (white/gray/black). Any back edge indicates a cycle.
 - Failure behavior: CRITICAL. Graph advances to Repair. If repair cannot break cycles, graph fails.
 
-**V02 â€” No Orphan Nodes**
+**V02 — No Orphan Nodes**
 - Purpose: Concepts with no relationships cannot be placed in a learning path or assessment.
 - Implementation: Nodes with degree 0 in the union of REQUIRES and RELATED_TO edges.
 - Failure behavior: WARNING. Orphan nodes are flagged but do not block graph advancement. Reviewer decides whether to add relationships or remove the node.

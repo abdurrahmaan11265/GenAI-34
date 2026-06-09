@@ -42,7 +42,12 @@ class CurriculumService:
             for c in concepts
         ]
         edge_tuples = [(str(e.from_concept_id), str(e.to_concept_id)) for e in edges]
-        items = planner.build_curriculum(concept_dicts, edge_tuples, states, masteries)
+        
+        from app.repositories.neo4j_repo import Neo4jRepository
+        neo4j_repo = Neo4jRepository()
+        neo4j_order = await neo4j_repo.get_topological_order(book_id)
+        
+        items = planner.build_curriculum(concept_dicts, edge_tuples, states, masteries, neo4j_order)
         return items
 
     @staticmethod

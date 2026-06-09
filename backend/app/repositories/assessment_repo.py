@@ -139,11 +139,13 @@ class AssessmentRepository:
 
     async def upsert_concept_mastery(self, user_id: str, concept_id: str,
                                      mastery_score: float, mastery_state: str,
-                                     source: str = "ASSESSMENT") -> None:
+                                     source: str = "ASSESSMENT",
+                                     retention_score: float = 0.0) -> None:
         now = datetime.now(timezone.utc)
         first_mastered = now if mastery_state == "MASTERED" else None
         set_ = {
             "mastery_score": mastery_score,
+            "retention_score": retention_score,
             "mastery_state": mastery_state,
             "last_reviewed_at": now,
             "updated_by_source": source,
@@ -157,6 +159,7 @@ class AssessmentRepository:
             user_id=user_id,
             concept_id=concept_id,
             mastery_score=mastery_score,
+            retention_score=retention_score,
             mastery_state=mastery_state,
             first_mastered_at=first_mastered,
             last_reviewed_at=now,

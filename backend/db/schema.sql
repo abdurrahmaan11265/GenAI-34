@@ -362,11 +362,6 @@ CREATE TABLE concepts (
         REFERENCES chapters(id)
         ON DELETE SET NULL,
 
-    -- allows merging duplicate concepts across graph versions
-    canonical_concept_id UUID
-        REFERENCES concepts(id)
-        ON DELETE SET NULL,
-
     name TEXT NOT NULL,
 
     summary TEXT NOT NULL,
@@ -405,7 +400,7 @@ CREATE TABLE concepts (
 
 CREATE INDEX idx_concepts_book         ON concepts(book_id);
 CREATE INDEX idx_concepts_chapter      ON concepts(chapter_id);
-CREATE INDEX idx_concepts_canonical    ON concepts(canonical_concept_id);
+
 CREATE INDEX idx_concepts_difficulty   ON concepts(difficulty_level);
 CREATE INDEX idx_concepts_graph_version ON concepts(book_id, graph_version);
 CREATE INDEX idx_concepts_metadata     ON concepts USING GIN(metadata);
@@ -1373,6 +1368,8 @@ CREATE TABLE concept_mastery (
         ON DELETE CASCADE,
 
     mastery_score NUMERIC(5,4) NOT NULL DEFAULT 0,
+
+    retention_score NUMERIC(5,4) NOT NULL DEFAULT 0,
 
     mastery_state mastery_state NOT NULL DEFAULT 'UNKNOWN',
 

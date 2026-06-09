@@ -122,7 +122,7 @@ class BookService:
 
     async def get_book_graph(self, book_id: str):
         from sqlalchemy import text
-        from app.schemas.book import GraphDTO, KGNodeDTO, KGEdgeDTO
+        from app.schemas.book import GraphDTO, KGNodeDTO, KGEdgeDTO, DIFFICULTY_MAPPING
         
         concept_rows = await self.book_repo.session.execute(text('''
             SELECT id, name as title, summary, difficulty_level, created_at
@@ -132,13 +132,14 @@ class BookService:
         
         nodes = []
         for r in concept_rows:
+            diff_str = DIFFICULTY_MAPPING.get(r.difficulty_level, "beginner")
             nodes.append(KGNodeDTO(
                 id=str(r.id),
                 bookId=book_id,
                 title=r.title,
                 summary=r.summary,
                 sourceChunks=[],
-                difficultyTier=r.difficulty_level,
+                difficultyTier=diff_str,
                 orderIndex=0,
                 sectionName=None,
                 createdAt=r.created_at.isoformat()

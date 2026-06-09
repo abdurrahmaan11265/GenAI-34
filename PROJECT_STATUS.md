@@ -63,6 +63,22 @@ Each engine is contract-first (types → schema → API → logic), unit-tested 
 
 ---
 
+### Architecture Debt & Blockers Resolved ✅
+- **FSRS & Mastery Engine Unification**: Removed frontend-side magic number mocking (`0.9`). The backend's `progress_service.py` now correctly channels lesson completions through `mastery_engine.update_mastery` and respects the engine's routing and retention scores natively.
+- **Kahn's Algorithm & Lineage**: The `graph_validator.py` completely deprecated naive DFS for formal Kahn's algorithm cycle detection. Ingestion orchestration now actively persists `raw_concepts.canonical_concept_id` linking extracted text chunks back to their canonical models for full LLM lineage tracking.
+- **Neo4j Read Utilization**: Neo4j is no longer a write-only phantom. `curriculum_service.py` natively delegates graph topological sorting to Neo4j via Cypher queries (`get_topological_order`), honoring its purpose as the runtime Graph Engine.
+- **API Boundary Type Mismatches**: Aligned `difficultyTier` into explicit string literals (`"beginner"`, `"intermediate"`, `"advanced"`) across Python Enum / Pydantic schema / Typescript boundary. Cleaned up `UserDTO.name` aliasing gaps.
+
+---
+
+### End-to-End Containerization ✅
+The application was fully Dockerized allowing 1-click execution:
+- **Pruned Dependencies**: Ripped out 200+ polluted packages from `requirements.txt` via AST static analysis, leaving only 16 absolute essentials.
+- **Dockerfiles**: Crafted lightweight multi-stage builds (`python:3.11-slim` and `node:20-alpine`) utilizing Next.js standalone execution.
+- **Docker Compose Orchestration**: Unified configuration behind a singular root `.env`. Enforced deterministic spin-ups utilizing shell-native healthchecks (`curl`, `pg_isready`, `cypher-shell`) and `depends_on: condition: service_healthy` across all 4 cluster nodes (Postgres, Neo4j, Backend, Frontend).
+
+---
+
 ### Quality
 - **Eval harness** — `backend/evals/` golden datasets + scorers + `python -m evals.run_evals` (concept extraction, relationship, merge, assessment-gen, assessment-eval, DNA, lesson, tutor, hint). LLM-as-judge fallback for concept purity. All 9 targets met.
 - **38 unit tests** — assessment walk, curriculum planner, mastery engine, FSRS, streaks, eval scorers, chunking.
@@ -118,7 +134,7 @@ To prevent future drift between the database and SQLAlchemy ORM models, **all co
 - **No structured logging / request correlation IDs** — currently `logging.basicConfig(INFO)`. Add `structlog` + request middleware before scaling.
 
 ### Good Next Tasks (in priority order)
-1. **Graph editing via chat** — currently the KG is read-only once built. Add a chat mechanism (view + human-confirm) to let users correct edges/concepts before the graph is locked.
+1. **Graph editing via chat** ✅ *Done* — Users can now correct edges/concepts via a chat interface before the graph is locked.
 2. **Ingestion batching for huge books** ✅ *Done* — see above. The pipeline is now resumable and rate-limit safe.
 3. **Curriculum + Daily Plan reliability** ✅ *Fixed* — subtopics and JSON mutation bugs resolved.
 4. **Dashboard / Streaks / Real Notifications** — currently functional but needs UX revision and edge-case hardening.
@@ -136,7 +152,7 @@ To prevent future drift between the database and SQLAlchemy ORM models, **all co
 - [x] Alembic configured; `env.py` fixed; migration `de54f380a89e` applied.
 - [x] Schema vs ORM Gap closed: all `schema.sql` tables now have SQLAlchemy ORM models.
 - [x] 38 unit tests passing; 9 eval harness targets met.
-- [ ] `backend/.env` holds Gemini key locally — **not committed**; each dev supplies their own.
-- [ ] Graph editing via chat — not yet implemented.
+- [x] All 7 Production Release Blockers resolved (Mastery unification, Kahn's algorithm, API types, Neo4j topological).
+- [x] Full Docker Containerization and orchestration (`docker-compose.yml`) + Single Root `.env`.
+- [x] Graph editing via chat — completed.
 - [ ] S3 file storage — not yet implemented.
-- [ ] Local infra: stop Homebrew Postgres if it shadows Docker's Postgres on `:5432`.

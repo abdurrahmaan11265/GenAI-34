@@ -8,7 +8,7 @@ class GraphValidator:
     def validate(concepts: List[Dict[str, Any]], edges: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         failures = []
         
-        # V01: Cycle Detection (Kahn's Algorithm / DFS)
+        # V01: Cycle Detection (DFS)
         cycles_found = GraphValidator.detect_cycles(concepts, edges)
         if cycles_found:
             failures.append({
@@ -33,41 +33,41 @@ class GraphValidator:
     @staticmethod
     def detect_cycles(concepts: List[Dict[str, Any]], edges: List[Dict[str, Any]]) -> List[List[str]]:
         """
-        Uses DFS to find cycles in PREREQUISITE edges.
-        Returns a list of cycles, where each cycle is a list of concept_ids.
+        Uses Kahn's Algorithm (Topological Sort) to detect cycles in PREREQUISITE edges.
+        Returns a list containing the nodes involved in the cycle if one exists.
         """
-        adj = {c["id"]: [] for c in concepts}
-        for e in edges:
-            if e.get("relationship_type") == "PREREQUISITE":
-                if e["source_concept_id"] in adj:
-                    adj[e["source_concept_id"]].append(e["target_concept_id"])
-                    
-        visited = set()
-        rec_stack = set()
-        cycles = []
-        path = []
+        from collections import deque
         
-        def dfs(node):
-            visited.add(node)
-            rec_stack.add(node)
-            path.append(node)
-            
-            for neighbor in adj.get(node, []):
-                if neighbor not in visited:
-                    dfs(neighbor)
-                elif neighbor in rec_stack:
-                    # Cycle detected
-                    cycle_start = path.index(neighbor)
-                    cycles.append(path[cycle_start:].copy())
+        adj = {c["id"]: [] for c in concepts}
+        indegree = {c["id"]: 0 for c in concepts}
+        
+        for e in edges:
+            # handle both relationship_type and edge_type for robustness during different pipeline stages
+            edge_type = e.get("relationship_type", e.get("edge_type", "PREREQUISITE"))
+            if edge_type == "PREREQUISITE":
+                src = e.get("source_concept_id", e.get("from_concept_id"))
+                tgt = e.get("target_concept_id", e.get("to_concept_id"))
+                if src in adj and tgt in indegree:
+                    adj[src].append(tgt)
+                    indegree[tgt] += 1
                     
-            rec_stack.remove(node)
-            path.pop()
+        queue = deque([node for node, deg in indegree.items() if deg == 0])
+        visited_count = 0
+        
+        while queue:
+            node = queue.popleft()
+            visited_count += 1
+            for neighbor in adj[node]:
+                indegree[neighbor] -= 1
+                if indegree[neighbor] == 0:
+                    queue.append(neighbor)
+                    
+        if visited_count != len(concepts):
+            # A cycle exists. Return the nodes that are part of the cycle (indegree > 0)
+            cycle_nodes = [node for node, deg in indegree.items() if deg > 0]
+            return [cycle_nodes]
             
-        for c in concepts:
-            if c["id"] not in visited:
-                dfs(c["id"])
-                
-        return cycles
+        return []
 
     @staticmethod
     def detect_orphans(concepts: List[Dict[str, Any]], edges: List[Dict[str, Any]]) -> List[str]:

@@ -106,30 +106,6 @@ def topological_order(concept_ids: Sequence[str],
     return order
 
 
-def _descendants(prereq_edges: Sequence[Tuple[str, str]]) -> Dict[str, Set[str]]:
-    """Transitive dependents: for each concept, all concepts that (directly or
-    indirectly) require it as a prerequisite."""
-    adj: Dict[str, List[str]] = defaultdict(list)
-    nodes: Set[str] = set()
-    for src, dst in prereq_edges:
-        adj[src].append(dst)
-        nodes.add(src)
-        nodes.add(dst)
-
-    result: Dict[str, Set[str]] = {}
-    for node in nodes:
-        seen: Set[str] = set()
-        stack = list(adj[node])
-        while stack:
-            cur = stack.pop()
-            if cur in seen:
-                continue
-            seen.add(cur)
-            stack.extend(adj[cur])
-        result[node] = seen
-    return result
-
-
 def _group_responses(responses: Sequence[Response]) -> Dict[str, List[Response]]:
     grouped: Dict[str, List[Response]] = defaultdict(list)
     for r in responses:
@@ -137,25 +113,13 @@ def _group_responses(responses: Sequence[Response]) -> Dict[str, List[Response]]
     return grouped
 
 
-def _failed_mcq(grouped: Dict[str, List[Response]]) -> Set[str]:
+def failed_mcq(grouped: Dict[str, List[Response]]) -> Set[str]:
     """Concepts that failed the easy (MCQ) tier — these trigger branch-stop."""
     failed: Set[str] = set()
     for cid, rs in grouped.items():
         if rs and rs[0].question_type == "MCQ" and not rs[0].is_correct:
             failed.add(cid)
     return failed
-
-
-def blocked_concepts(prereq_edges: Sequence[Tuple[str, str]],
-                     responses: Sequence[Response]) -> Set[str]:
-    """All concepts skipped because an ancestor failed its easy tier."""
-    grouped = _group_responses(responses)
-    failed = _failed_mcq(grouped)
-    desc = _descendants(prereq_edges)
-    blocked: Set[str] = set()
-    for cid in failed:
-        blocked |= desc.get(cid, set())
-    return blocked
 
 
 def _concept_progress(rs: List[Response]) -> Tuple[bool, int]:
@@ -177,14 +141,14 @@ def _concept_progress(rs: List[Response]) -> Tuple[bool, int]:
 
 def next_question(concept_ids: Sequence[str],
                   prereq_edges: Sequence[Tuple[str, str]],
-                  responses: Sequence[Response]) -> Optional[NextQuestion]:
+                  responses: Sequence[Response],
+                  blocked: Set[str]) -> Optional[NextQuestion]:
     """The next (concept, tier) to ask, or None when the walk is complete.
 
     Walks concepts in topological order; skips blocked (presumed-unknown)
     concepts; for each remaining concept asks the next un-answered tier.
     """
     order = topological_order(concept_ids, prereq_edges)
-    blocked = blocked_concepts(prereq_edges, responses)
     grouped = _group_responses(responses)
 
     for cid in order:
@@ -200,7 +164,8 @@ def next_question(concept_ids: Sequence[str],
 
 def compute_outcomes(concept_ids: Sequence[str],
                      prereq_edges: Sequence[Tuple[str, str]],
-                     responses: Sequence[Response]) -> List[ConceptOutcome]:
+                     responses: Sequence[Response],
+                     blocked: Set[str]) -> List[ConceptOutcome]:
     """Final per-concept placement after the walk completes.
 
     Every concept lands in a known state (Section D output contract): tested
@@ -208,7 +173,6 @@ def compute_outcomes(concept_ids: Sequence[str],
     implements the graph reveal (Section E): MASTERED, else AVAILABLE when all
     direct prerequisites are mastered, else LOCKED.
     """
-    blocked = blocked_concepts(prereq_edges, responses)
     grouped = _group_responses(responses)
 
     direct_prereqs: Dict[str, List[str]] = defaultdict(list)

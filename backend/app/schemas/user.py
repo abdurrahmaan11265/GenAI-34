@@ -12,15 +12,16 @@ class UserLogin(BaseModel):
     password: str
 
 class AuthResponse(BaseModel):
-    user: dict # Contains id, name, email
-    token: str
+    access_token: str
+    token_type: str = "bearer"
+    user: UserDTO
 
 class UserDTO(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     id: str
     email: str
-    name: str = Field(alias="full_name")
+    name: str
     avatar_url: Optional[str] = Field(alias="avatarUrl", default=None)
     daily_new_node_cap: int = Field(alias="dailyNewNodeCap", default=10)
     daily_reminder_time: Optional[str] = Field(alias="dailyReminderTime", default=None)
@@ -37,7 +38,7 @@ class UserDTO(BaseModel):
         return cls(
             id=str(user.id),
             email=user.email,
-            full_name=user.full_name,
+            name=user.full_name,
             avatarUrl=user.avatar_url,
             dailyNewNodeCap=user.daily_new_node_cap,
             dailyReminderTime=user.daily_reminder_time,

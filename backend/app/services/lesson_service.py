@@ -161,14 +161,28 @@ class LessonService:
         return HintDTO(hintLevel=out.hint_level or hint_level, hint=out.hint, reason=out.reason)
 
     async def complete_lesson(self, user_id: str, session_id: str) -> CompleteLessonDTO:
-        """End/pause the teaching session. Does NOT grant mastery — mastery is
-        earned only by passing the mastery-check quiz (AGENT.md: mastery is not
-        self-declared)."""
+        """End/pause the teaching session. A completion grants a small BONUS_LESSON
+        mastery increase through the progress engine. But it DOES NOT grant full mastery 
+        (that requires passing a quiz)."""
         sess = await self._load_session_owned(user_id, session_id)
+        concept = await self.repo.get_concept(str(sess.concept_id))
+        
+        unlocked = []
         if sess.status != "COMPLETED":
             sess.status = "COMPLETED"
             sess.completed_at = datetime.now(timezone.utc)
-        return CompleteLessonDTO(status="COMPLETED", unlockedConcepts=[])
+            progress = ProgressService(self.graph, self.assess)
+            unlocked = await progress.complete_concept(
+                user_id, str(concept.book_id), str(sess.concept_id), source="LESSON")
+            
+        mastery = await self.repo.get_mastery(user_id, str(sess.concept_id))
+        return CompleteLessonDTO(
+            status="COMPLETED",
+            masteryScore=mastery,
+            unlockedNodes=unlocked,
+            unlockedNodeIds=[],
+            nextDue=""
+        )
 
     # ---- mastery-check quiz (the gate that earns mastery) -------------------
 

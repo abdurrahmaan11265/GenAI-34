@@ -71,7 +71,10 @@ class HintDTO(BaseModel):
 class CompleteLessonDTO(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
     status: str
-    unlockedConcepts: List[str] = Field(alias="unlockedConcepts", default_factory=list)
+    masteryScore: float = Field(alias="masteryScore", default=0.0)
+    unlockedNodes: List[str] = Field(alias="unlockedNodes", default_factory=list)
+    unlockedNodeIds: List[str] = Field(alias="unlockedNodeIds", default_factory=list)
+    nextDue: str = Field(alias="nextDue", default="")
 
 
 # ---- mastery-check quiz ----------------------------------------------------

@@ -29,9 +29,11 @@ class AuthService:
         
         token = create_access_token(subject=user.id)
         
+        from app.schemas.user import UserDTO
         return AuthResponse(
-            user={"id": str(user.id), "name": user.full_name, "email": user.email},
-            token=token
+            user=UserDTO.from_orm(user),
+            access_token=token,
+            token_type="bearer"
         )
 
     async def login(self, data: UserLogin) -> AuthResponse:
@@ -44,7 +46,9 @@ class AuthService:
             
         token = create_access_token(subject=user.id)
         
+        from app.schemas.user import UserDTO
         return AuthResponse(
-            user={"id": str(user.id), "name": user.full_name, "email": user.email},
-            token=token
+            user=UserDTO.from_orm(user),
+            access_token=token,
+            token_type="bearer"
         )

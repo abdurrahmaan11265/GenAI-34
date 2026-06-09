@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Sequence, Tuple
 
 from app.services.assessment_walk import topological_order
+from app.services.mastery_engine import MASTERY_THRESHOLD
 
 # Default minutes per item when a concept has no estimate (UI time hints).
 DEFAULT_MINUTES = 10
@@ -33,22 +34,29 @@ class CurriculumItem:
 def build_curriculum(concepts: Sequence[dict],
                      prereq_edges: Sequence[Tuple[str, str]],
                      states: Dict[str, str],
-                     masteries: Dict[str, float]) -> List[CurriculumItem]:
+                     masteries: Dict[str, float],
+                     neo4j_topological_order: List[str]) -> List[CurriculumItem]:
     """Ordered learning path for one book.
 
     `concepts` are dicts: {id, title, estimated_minutes}. `states` maps
     concept_id -> node_state; `masteries` maps concept_id -> score. Concepts
     with no recorded state default to AVAILABLE (root) / LOCKED (has prereqs).
+    The topological order is provided by Neo4j's Cypher resolution.
     """
     by_id = {c["id"]: c for c in concepts}
-    order = topological_order([c["id"] for c in concepts], prereq_edges)
+    order = list(neo4j_topological_order)
+    
+    # Defensive: Ensure all concepts exist in the topological order
+    for cid in by_id.keys():
+        if cid not in order:
+            order.append(cid)
 
     direct_prereqs: Dict[str, List[str]] = defaultdict(list)
     for src, dst in prereq_edges:
         direct_prereqs[dst].append(src)
 
     mastered = {cid for cid in by_id if states.get(cid) == "MASTERED"
-                or (cid not in states and masteries.get(cid, 0.0) >= 0.85)}
+                or (cid not in states and masteries.get(cid, 0.0) >= MASTERY_THRESHOLD)}
 
     items: List[CurriculumItem] = []
     for idx, cid in enumerate(order):

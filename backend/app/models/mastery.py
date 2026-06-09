@@ -88,6 +88,7 @@ class ConceptMastery(Base):
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     concept_id = Column(UUID(as_uuid=True), ForeignKey("concepts.id", ondelete="CASCADE"), nullable=False)
     mastery_score = Column(Numeric(5, 4), nullable=False, default=0)
+    retention_score = Column(Numeric(5, 4), nullable=False, default=0)
     mastery_state = Column(
         ENUM('UNKNOWN', 'LEARNING', 'PRACTICING', 'MASTERED', 'FORGOTTEN', name='mastery_state', create_type=False),
         nullable=False, default='UNKNOWN',

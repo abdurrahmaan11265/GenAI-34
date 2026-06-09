@@ -10,11 +10,14 @@ Progress + gamification layer — streaks, scores, and the Coursera-style gated 
 Keep the content graph (the book's concepts) separate from user state (mastery, intervals, history). One book → one canonical graph; many users → many overlays on top of it. This separation keeps the same graph reusable across users and lets you ship shared graphs for popular books.
 
 B. Core data model
-Book — { id, owner_id, title, source_file, status, kg_id }. Status moves through uploaded → parsing → kg_built → kg_verified → ready.
+Book — { id, owner_id, title, source_file, status }. The canonical graph version is derived dynamically from the graph_versions table. Status moves through uploaded → parsing → kg_built → kg_verified → ready.
 KG Node (concept) — { id, book_id, title, summary, source_chunks[], difficulty_tier }. Every node is traceable back to the chunk of book text it came from.
 KG Edge — { from_node, to_node, type: "prerequisite" | "related", weight, confidence }. The prerequisite edges form a DAG — this is the single most important invariant in the system; assessment, locking, and graph reveal all read from it.
-User-Node State — the user overlay: { user_id, node_id, mastery_score, recall_stability, recall_difficulty, last_reviewed, next_due, state: "locked" | "available" | "in_progress" | "mastered" | "due" }.
-Question — { id, node_id, type: "mcq" | "theory" | "applied", difficulty, source: "generated" | "user_asked" | "assessment_miss" }. The source field is what powers targeted revision later.
+User-Node State — the user overlay is normalized into three structures to separate curriculum state, raw mastery, and spaced repetition:
+  - user_concept_state: { user_id, concept_id, state: "locked" | "available" | "in_progress" | "mastered" | "due" }
+  - concept_mastery: { mastery_score, last_assessed }
+  - concept_fsrs: { stability, difficulty, next_due, last_reviewed }
+Question — { id, node_id, type: "mcq" | "theory" | "applied", difficulty, source: "generated" | "user_asked" | "assessment_miss" | "revision" }. The source field is what powers targeted revision later.
 Session — { id, user_id, book_id, mode: "learning" | "revision", node_ids[], transcript, questions_asked[], outcomes[] }.
 
 C. Ingestion & KG construction (the pipeline behind everything)

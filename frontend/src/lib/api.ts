@@ -63,6 +63,13 @@ const difficultyTier = (level: number): "beginner" | "intermediate" | "advanced"
   return "advanced";
 };
 
+const tierToDifficulty = (tier: "beginner" | "intermediate" | "advanced" | undefined): number | undefined => {
+  if (!tier) return undefined;
+  if (tier === "beginner") return 2;
+  if (tier === "intermediate") return 3;
+  return 4;
+};
+
 const confToInt = (c: string): number =>
   c === "certain" ? 5 : c === "fairly_sure" ? 3 : 2;
 
@@ -216,8 +223,13 @@ export async function getBookStatus(token: string, bookId: string): Promise<Book
 export async function getGraph(token: string, bookId: string): Promise<GraphDTO> {
   const g = await apiGet<GraphDTO>(`/books/${bookId}/graph`, { token });
   // Backend returns the raw enum (PREREQUISITE/RELATED); UI expects lowercase.
+  // Backend returns difficultyTier as an integer (1-5); UI expects string union.
   return {
     ...g,
+    nodes: (g.nodes ?? []).map((n) => ({
+      ...n,
+      difficultyTier: difficultyTier(n.difficultyTier as unknown as number),
+    })),
     edges: (g.edges ?? []).map((e) => ({ ...e, type: String(e.type).toLowerCase() as KGEdgeDTO["type"] })),
   };
 }
@@ -229,10 +241,18 @@ export async function confirmGraph(token: string, bookId: string): Promise<{ suc
 
 // Graph editor mutations (verify page) — backend editor endpoints are future work.
 export async function createGraphNode(token: string, bookId: string, data: CreateNodeDTO): Promise<{ node: KGNodeDTO }> {
-  return apiPost<{ node: KGNodeDTO }>(`/books/${bookId}/graph/nodes`, data, { token });
+  const backendData = { ...data, difficulty: tierToDifficulty(data.difficultyTier) };
+  // @ts-ignore
+  delete backendData.difficultyTier;
+  const raw = await apiPost<{ node: KGNodeDTO }>(`/books/${bookId}/graph/nodes`, backendData, { token });
+  return { node: { ...raw.node, difficultyTier: difficultyTier(raw.node.difficultyTier as unknown as number) } };
 }
 export async function updateGraphNode(token: string, bookId: string, nodeId: string, data: UpdateNodeDTO): Promise<{ node: KGNodeDTO }> {
-  return apiPatch<{ node: KGNodeDTO }>(`/books/${bookId}/graph/nodes/${nodeId}`, data, { token });
+  const backendData = { ...data, difficulty: tierToDifficulty(data.difficultyTier) };
+  // @ts-ignore
+  delete backendData.difficultyTier;
+  const raw = await apiPatch<{ node: KGNodeDTO }>(`/books/${bookId}/graph/nodes/${nodeId}`, backendData, { token });
+  return { node: { ...raw.node, difficultyTier: difficultyTier(raw.node.difficultyTier as unknown as number) } };
 }
 export async function deleteGraphNode(token: string, bookId: string, nodeId: string): Promise<{ success: true }> {
   return apiDelete<{ success: true }>(`/books/${bookId}/graph/nodes/${nodeId}`, { token });
@@ -473,13 +493,13 @@ export async function sendMessage(
 }
 
 export async function completeSession(token: string, sessionId: string): Promise<CompleteSessionResponseDTO> {
-  const raw = await apiPost<{ status: string; unlockedConcepts: string[] }>(
+  const raw = await apiPost<{ status: string; masteryScore: number; unlockedNodes: string[]; unlockedNodeIds: string[]; nextDue: string }>(
     `/lessons/${sessionId}/complete`, {}, { token });
   return {
-    masteryScore: 0.9,
-    unlockedNodes: raw.unlockedConcepts ?? [],
-    unlockedNodeIds: [],
-    nextDue: todayPlus(1),
+    masteryScore: raw.masteryScore ?? 0.0,
+    unlockedNodes: raw.unlockedNodes ?? [],
+    unlockedNodeIds: raw.unlockedNodeIds ?? [],
+    nextDue: raw.nextDue || todayPlus(1),
   };
 }
 
