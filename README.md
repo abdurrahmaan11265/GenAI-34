@@ -408,7 +408,6 @@ For single-node VPS deployment, the provided `docker-compose.yml` serves as a pr
 # Roadmap
 
 - **S3 File Storage**: Transition from local disk caching to a persistent `S3StorageProvider`.
-- **Graph Editing via Chat**: Add mechanisms for human-in-the-loop verification and modification of extracted concepts before graph publication.
 - **Integration Test Suite**: Build API-level system integration tests (currently relies on pure unit tests and manual QA).
 
 ---
@@ -423,21 +422,6 @@ For single-node VPS deployment, the provided `docker-compose.yml` serves as a pr
 | `docs/architecture/ingestion_pipeline.md` | Detailed explanation of the 8-stage graph orchestration pipeline |
 | `docs/prompts/*.md` | Isolated LLM system prompts (Tutor, extraction, assessments) |
 | `backend/db/schema.sql` | The absolute source of truth for the Postgres relational schema |
-
----
-
-# Contributing
-
-1. **Document Precedence**: When in doubt, `AGENT.md` > Architecture Docs > Codebase. `backend/db/schema.sql` is the absolute source of truth for the database; Alembic ORMs must be manually synced to match it.
-2. **Branching**: Submit all changes via PRs against `main`.
-3. **Coding Standards**: Python backend must pass `ruff format` and `ruff check`. Next.js frontend strictly adheres to TypeScript and ESLint standards. 
-4. **Architectural Guardrails**: Never bypass the Service-Repository layer. Never introduce synchronous dual-writes to Neo4j.
-
----
-
-# License
-
-*Placeholder: No formal license has been specified for this repository yet.*
 
 ---
 
