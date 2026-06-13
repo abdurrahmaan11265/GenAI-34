@@ -9,7 +9,11 @@
  *   const books = await apiGet<BookSummaryDTO[]>("/books", token);
  */
 
-const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+// Use INTERNAL_API_URL (e.g. http://backend:8000/api/v1) during Next.js Server-Side Rendering
+// and fallback to NEXT_PUBLIC_API_URL for the browser.
+const BASE = (typeof window === "undefined" && process.env.INTERNAL_API_URL)
+  ? process.env.INTERNAL_API_URL
+  : (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api/v1");
 
 export class ApiError extends Error {
   constructor(
