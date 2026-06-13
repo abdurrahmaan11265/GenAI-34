@@ -12,5 +12,5 @@ COPY . .
 ENV HOST=0.0.0.0
 ENV PORT=8000
 
-# Use array syntax so it handles signals properly
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Use sh -c to chain migrations before starting the server
+CMD ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"]
