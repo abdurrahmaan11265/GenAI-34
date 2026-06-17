@@ -68,7 +68,6 @@ def upgrade() -> None:
     sa.CheckConstraint("source_type::text = ANY (ARRAY['PDF'::character varying, 'EPUB'::character varying, 'TXT'::character varying, 'DOCX'::character varying, 'URL'::character varying]::text[])", name='books_source_type_check'),
     sa.CheckConstraint('page_count IS NULL OR page_count > 0', name='chk_page_count'),
     sa.CheckConstraint('processing_completed_at IS NULL OR processing_started_at IS NULL OR processing_completed_at >= processing_started_at', name='chk_processing_time'),
-    sa.ForeignKeyConstraint(['owner_id'], ['users.id'], ),
     sa.ForeignKeyConstraint(['owner_id'], ['users.id'], name='fk_books_owner', ondelete='SET NULL'),
     sa.PrimaryKeyConstraint('id', name='books_pkey'),
     comment='Uploaded books and learning resources. Status lifecycle: UPLOADINGΓåÆPARSINGΓåÆEXTRACTING_CONCEPTSΓåÆKG_BUILTΓåÆKG_VERIFIEDΓåÆREADY.'
@@ -87,7 +86,6 @@ def upgrade() -> None:
     sa.Column('completed_at', sa.DateTime(timezone=True), nullable=False),
     sa.CheckConstraint('content_version > 0', name='chk_content_version'),
     sa.ForeignKeyConstraint(['user_id'], ['users.id'], name='content_completions_user_id_fkey', ondelete='CASCADE'),
-    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id', name='content_completions_pkey'),
     sa.UniqueConstraint('user_id', 'content_type', 'content_id', 'content_version', name='uq_completion'),
     comment='Idempotency guard for bonus awards. First completion wins.'
@@ -114,7 +112,6 @@ def upgrade() -> None:
     sa.CheckConstraint('questions_answered >= 0', name='chk_questions_answered'),
     sa.CheckConstraint('tutor_messages_sent >= 0', name='chk_tutor_messages'),
     sa.ForeignKeyConstraint(['user_id'], ['users.id'], name='daily_activity_user_id_fkey', ondelete='CASCADE'),
-    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id', name='daily_activity_pkey'),
     sa.UniqueConstraint('user_id', 'activity_date', name='uq_daily_activity'),
     comment='One row per (user, date). Source of truth for streak computation.'
@@ -146,7 +143,6 @@ def upgrade() -> None:
     sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
     sa.CheckConstraint('dna_version > 0', name='chk_dna_version'),
     sa.ForeignKeyConstraint(['user_id'], ['users.id'], name='learning_dna_user_id_fkey', ondelete='CASCADE'),
-    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id', name='learning_dna_pkey'),
     sa.UniqueConstraint('user_id', 'dna_version', name='uq_user_dna_version'),
     comment='Versioned personalized learner model. Append-only.'
@@ -163,7 +159,6 @@ def upgrade() -> None:
     sa.CheckConstraint('current_streak_days >= 0', name='chk_current_streak'),
     sa.CheckConstraint('longest_streak_days >= 0', name='chk_longest_streak'),
     sa.ForeignKeyConstraint(['user_id'], ['users.id'], name='learning_streaks_user_id_fkey', ondelete='CASCADE'),
-    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('user_id', name='learning_streaks_pkey'),
     comment='Global daily-activity streak per user.'
     )
@@ -177,7 +172,6 @@ def upgrade() -> None:
     sa.Column('action_url', sa.Text(), nullable=True),
     sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
     sa.ForeignKeyConstraint(['user_id'], ['users.id'], name='notifications_user_id_fkey', ondelete='CASCADE'),
-    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id', name='notifications_pkey')
     )
     op.create_index('idx_notifications_unread', 'notifications', ['user_id'], unique=False, postgresql_where='(is_read = false)')
@@ -197,9 +191,7 @@ def upgrade() -> None:
     sa.CheckConstraint('score_percentage IS NULL OR score_percentage >= 0::numeric AND score_percentage <= 100::numeric', name='chk_score'),
     sa.CheckConstraint('total_questions IS NULL OR total_questions > 0', name='chk_total_questions'),
     sa.ForeignKeyConstraint(['book_id'], ['books.id'], name='assessments_book_id_fkey', ondelete='CASCADE'),
-    sa.ForeignKeyConstraint(['book_id'], ['books.id'], ondelete='CASCADE'),
     sa.ForeignKeyConstraint(['user_id'], ['users.id'], name='assessments_user_id_fkey', ondelete='CASCADE'),
-    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id', name='assessments_pkey'),
     comment='Placement/chapter/revision assessments per user per book.'
     )
@@ -219,9 +211,7 @@ def upgrade() -> None:
     sa.CheckConstraint('current_streak_days >= 0', name='chk_book_current_streak'),
     sa.CheckConstraint('longest_streak_days >= 0', name='chk_book_longest_streak'),
     sa.ForeignKeyConstraint(['book_id'], ['books.id'], name='book_streaks_book_id_fkey', ondelete='CASCADE'),
-    sa.ForeignKeyConstraint(['book_id'], ['books.id'], ondelete='CASCADE'),
     sa.ForeignKeyConstraint(['user_id'], ['users.id'], name='book_streaks_user_id_fkey', ondelete='CASCADE'),
-    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id', name='book_streaks_pkey'),
     sa.UniqueConstraint('user_id', 'book_id', name='uq_book_streak'),
     comment='Per-book consistency streak per user.'
@@ -239,9 +229,7 @@ def upgrade() -> None:
     sa.Column('upload_status', postgresql.ENUM('PENDING', 'STORED', 'FAILED', name='upload_status'), nullable=False),
     sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
     sa.ForeignKeyConstraint(['book_id'], ['books.id'], name='book_uploads_book_id_fkey', ondelete='CASCADE'),
-    sa.ForeignKeyConstraint(['book_id'], ['books.id'], ondelete='CASCADE'),
     sa.ForeignKeyConstraint(['user_id'], ['users.id'], name='book_uploads_user_id_fkey', ondelete='CASCADE'),
-    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id', name='book_uploads_pkey')
     )
     op.create_table('chapters',
@@ -256,7 +244,6 @@ def upgrade() -> None:
     sa.CheckConstraint('chapter_number > 0', name='chk_chapter_number'),
     sa.CheckConstraint('estimated_minutes IS NULL OR estimated_minutes > 0', name='chk_estimated_minutes'),
     sa.ForeignKeyConstraint(['book_id'], ['books.id'], name='chapters_book_id_fkey', ondelete='CASCADE'),
-    sa.ForeignKeyConstraint(['book_id'], ['books.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id', name='chapters_pkey'),
     sa.UniqueConstraint('book_id', 'chapter_number', name='uq_book_chapter_number'),
     comment='Book chapters. Structural prior for concept extraction and chunking.'
@@ -291,9 +278,7 @@ def upgrade() -> None:
     sa.CheckConstraint('average_retrievability IS NULL OR average_retrievability >= 0::numeric AND average_retrievability <= 1::numeric', name='chk_avg_retrievability'),
     sa.CheckConstraint('overall_progress >= 0::numeric AND overall_progress <= 100::numeric', name='chk_progress'),
     sa.ForeignKeyConstraint(['book_id'], ['books.id'], name='progress_snapshots_book_id_fkey', ondelete='CASCADE'),
-    sa.ForeignKeyConstraint(['book_id'], ['books.id'], ondelete='CASCADE'),
     sa.ForeignKeyConstraint(['user_id'], ['users.id'], name='progress_snapshots_user_id_fkey', ondelete='CASCADE'),
-    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id', name='progress_snapshots_pkey'),
     sa.UniqueConstraint('user_id', 'book_id', 'snapshot_date', name='uq_snapshot'),
     comment='Daily snapshot of per-book progress metrics for trend charts.'
@@ -320,7 +305,6 @@ def upgrade() -> None:
     sa.CheckConstraint('estimated_minutes IS NULL OR estimated_minutes > 0', name='chk_concept_minutes'),
     sa.CheckConstraint('graph_version > 0', name='chk_concept_graph_version'),
     sa.ForeignKeyConstraint(['book_id'], ['books.id'], name='concepts_book_id_fkey', ondelete='CASCADE'),
-    sa.ForeignKeyConstraint(['book_id'], ['books.id'], ondelete='CASCADE'),
     sa.ForeignKeyConstraint(['chapter_id'], ['chapters.id'], name='concepts_chapter_id_fkey', ondelete='SET NULL'),
     sa.PrimaryKeyConstraint('id', name='concepts_pkey'),
     sa.UniqueConstraint('book_id', 'name', 'graph_version', name='uq_concept_book_name_version'),
@@ -343,11 +327,8 @@ def upgrade() -> None:
     sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
     sa.CheckConstraint('version > 0', name='chk_curriculum_version'),
     sa.ForeignKeyConstraint(['book_id'], ['books.id'], name='curriculum_plans_book_id_fkey', ondelete='CASCADE'),
-    sa.ForeignKeyConstraint(['book_id'], ['books.id'], ondelete='CASCADE'),
     sa.ForeignKeyConstraint(['generated_from_assessment'], ['assessments.id'], name='curriculum_plans_generated_from_assessment_fkey', ondelete='SET NULL'),
-    sa.ForeignKeyConstraint(['generated_from_assessment'], ['assessments.id'], ondelete='SET NULL'),
     sa.ForeignKeyConstraint(['user_id'], ['users.id'], name='curriculum_plans_user_id_fkey', ondelete='CASCADE'),
-    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id', name='curriculum_plans_pkey'),
     sa.UniqueConstraint('user_id', 'book_id', 'version', name='uq_curriculum_user_book_version'),
     comment='Generated learning order for a user on a book.'
@@ -384,9 +365,7 @@ def upgrade() -> None:
     sa.CheckConstraint('graph_version > 0', name='chk_graph_version_positive'),
     sa.CheckConstraint('nodes_created IS NULL OR nodes_created >= 0', name='chk_nodes_created'),
     sa.ForeignKeyConstraint(['book_id'], ['books.id'], name='graph_build_jobs_book_id_fkey', ondelete='CASCADE'),
-    sa.ForeignKeyConstraint(['book_id'], ['books.id'], ondelete='CASCADE'),
     sa.ForeignKeyConstraint(['book_upload_id'], ['book_uploads.id'], name='graph_build_jobs_book_upload_id_fkey', ondelete='CASCADE'),
-    sa.ForeignKeyConstraint(['book_upload_id'], ['book_uploads.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id', name='graph_build_jobs_pkey'),
     comment='Async pipeline job tracker. Only one COMPLETED build per (book, graph_version).'
     )
@@ -411,11 +390,8 @@ def upgrade() -> None:
     sa.CheckConstraint('page_start IS NULL AND page_end IS NULL OR page_start IS NOT NULL AND page_end IS NOT NULL AND page_end >= page_start', name='chk_page_numbers'),
     sa.CheckConstraint('token_count IS NULL OR token_count > 0', name='chk_token_count'),
     sa.ForeignKeyConstraint(['book_id'], ['books.id'], name='source_chunks_book_id_fkey', ondelete='CASCADE'),
-    sa.ForeignKeyConstraint(['book_id'], ['books.id'], ondelete='CASCADE'),
     sa.ForeignKeyConstraint(['book_upload_id'], ['book_uploads.id'], name='source_chunks_book_upload_id_fkey', ondelete='CASCADE'),
-    sa.ForeignKeyConstraint(['book_upload_id'], ['book_uploads.id'], ondelete='CASCADE'),
     sa.ForeignKeyConstraint(['chapter_id'], ['chapters.id'], name='source_chunks_chapter_id_fkey', ondelete='SET NULL'),
-    sa.ForeignKeyConstraint(['chapter_id'], ['chapters.id'], ondelete='SET NULL'),
     sa.PrimaryKeyConstraint('id', name='source_chunks_pkey'),
     sa.UniqueConstraint('book_id', 'chunk_index', name='uq_chunk_position'),
     comment='Text chunks from books. Every concept is traceable back to its source chunks.'
@@ -433,9 +409,7 @@ def upgrade() -> None:
     sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
     sa.CheckConstraint('mastery_estimate >= 0::numeric AND mastery_estimate <= 1::numeric', name='chk_mastery_estimate'),
     sa.ForeignKeyConstraint(['assessment_id'], ['assessments.id'], name='assessment_outcomes_assessment_id_fkey', ondelete='CASCADE'),
-    sa.ForeignKeyConstraint(['assessment_id'], ['assessments.id'], ondelete='CASCADE'),
     sa.ForeignKeyConstraint(['concept_id'], ['concepts.id'], name='assessment_outcomes_concept_id_fkey', ondelete='CASCADE'),
-    sa.ForeignKeyConstraint(['concept_id'], ['concepts.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id', name='assessment_outcomes_pkey'),
     sa.UniqueConstraint('assessment_id', 'concept_id', name='uq_assessment_concept_outcome'),
     comment='Per-concept placement result seeding mastery and node_state.'
@@ -450,9 +424,7 @@ def upgrade() -> None:
     sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
     sa.CheckConstraint('relevance_score IS NULL OR relevance_score >= 0::numeric AND relevance_score <= 1::numeric', name='chk_relevance_score'),
     sa.ForeignKeyConstraint(['chunk_id'], ['source_chunks.id'], name='concept_chunks_chunk_id_fkey', ondelete='CASCADE'),
-    sa.ForeignKeyConstraint(['chunk_id'], ['source_chunks.id'], ondelete='CASCADE'),
     sa.ForeignKeyConstraint(['concept_id'], ['concepts.id'], name='concept_chunks_concept_id_fkey', ondelete='CASCADE'),
-    sa.ForeignKeyConstraint(['concept_id'], ['concepts.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id', name='concept_chunks_pkey'),
     sa.UniqueConstraint('concept_id', 'chunk_id', name='uq_concept_chunk'),
     comment='Many-to-many: concept Γåö source chunks used to ground it.'
@@ -475,11 +447,8 @@ def upgrade() -> None:
     sa.CheckConstraint('graph_version > 0', name='chk_graph_version_edge'),
     sa.CheckConstraint('weight >= 0::numeric', name='chk_weight'),
     sa.ForeignKeyConstraint(['book_id'], ['books.id'], name='concept_edges_book_id_fkey', ondelete='CASCADE'),
-    sa.ForeignKeyConstraint(['book_id'], ['books.id'], ondelete='CASCADE'),
     sa.ForeignKeyConstraint(['from_concept_id'], ['concepts.id'], name='concept_edges_from_concept_id_fkey', ondelete='CASCADE'),
-    sa.ForeignKeyConstraint(['from_concept_id'], ['concepts.id'], ondelete='CASCADE'),
     sa.ForeignKeyConstraint(['to_concept_id'], ['concepts.id'], name='concept_edges_to_concept_id_fkey', ondelete='CASCADE'),
-    sa.ForeignKeyConstraint(['to_concept_id'], ['concepts.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id', name='concept_edges_pkey'),
     sa.UniqueConstraint('book_id', 'graph_version', 'from_concept_id', 'to_concept_id', 'edge_type', name='uq_concept_edge'),
     comment='KG edges ΓÇö prerequisite/related links between concepts forming a DAG. DAG invariant enforced at pipeline layer.'
@@ -521,9 +490,7 @@ def upgrade() -> None:
     sa.CheckConstraint("mastery_state <> 'MASTERED'::mastery_state OR first_mastered_at IS NOT NULL", name='chk_mastery_mastered_timestamp'),
     sa.CheckConstraint('mastery_score >= 0::numeric AND mastery_score <= 1::numeric', name='chk_mastery_score'),
     sa.ForeignKeyConstraint(['concept_id'], ['concepts.id'], name='concept_mastery_concept_id_fkey', ondelete='CASCADE'),
-    sa.ForeignKeyConstraint(['concept_id'], ['concepts.id'], ondelete='CASCADE'),
     sa.ForeignKeyConstraint(['user_id'], ['users.id'], name='concept_mastery_user_id_fkey', ondelete='CASCADE'),
-    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id', name='concept_mastery_pkey'),
     sa.UniqueConstraint('user_id', 'concept_id', name='uq_user_concept_mastery'),
     comment='Source of truth for numeric mastery score per (user, concept).'
@@ -565,7 +532,6 @@ def upgrade() -> None:
     sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
     sa.CheckConstraint('difficulty_level >= 1 AND difficulty_level <= 5', name='chk_question_difficulty'),
     sa.ForeignKeyConstraint(['concept_id'], ['concepts.id'], name='generated_questions_concept_id_fkey', ondelete='CASCADE'),
-    sa.ForeignKeyConstraint(['concept_id'], ['concepts.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id', name='generated_questions_pkey'),
     comment='Questions per concept. source=USER_ASKED|ASSESSMENT_MISS powers targeted revision.'
     )
@@ -590,9 +556,7 @@ def upgrade() -> None:
     sa.CheckConstraint('node_count >= 0', name='chk_gv_node_count'),
     sa.CheckConstraint('version > 0', name='chk_gv_version'),
     sa.ForeignKeyConstraint(['book_id'], ['books.id'], name='graph_versions_book_id_fkey', ondelete='CASCADE'),
-    sa.ForeignKeyConstraint(['book_id'], ['books.id'], ondelete='CASCADE'),
     sa.ForeignKeyConstraint(['build_job_id'], ['graph_build_jobs.id'], name='graph_versions_build_job_id_fkey', ondelete='RESTRICT'),
-    sa.ForeignKeyConstraint(['build_job_id'], ['graph_build_jobs.id'], ondelete='RESTRICT'),
     sa.PrimaryKeyConstraint('id', name='graph_versions_pkey'),
     sa.UniqueConstraint('book_id', 'version', name='uq_graph_version_per_book'),
     comment='Named snapshot of each completed graph build per book. Single source for version lookups.'
@@ -613,11 +577,8 @@ def upgrade() -> None:
     sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
     sa.CheckConstraint('completed_at IS NULL OR started_at IS NULL OR completed_at >= started_at', name='chk_lesson_time'),
     sa.ForeignKeyConstraint(['concept_id'], ['concepts.id'], name='lesson_sessions_concept_id_fkey', ondelete='CASCADE'),
-    sa.ForeignKeyConstraint(['concept_id'], ['concepts.id'], ondelete='CASCADE'),
     sa.ForeignKeyConstraint(['curriculum_plan_id'], ['curriculum_plans.id'], name='lesson_sessions_curriculum_plan_id_fkey', ondelete='SET NULL'),
-    sa.ForeignKeyConstraint(['curriculum_plan_id'], ['curriculum_plans.id'], ondelete='SET NULL'),
     sa.ForeignKeyConstraint(['user_id'], ['users.id'], name='lesson_sessions_user_id_fkey', ondelete='CASCADE'),
-    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id', name='lesson_sessions_pkey'),
     comment='One session = Socratic teaching of one concept.'
     )
@@ -638,9 +599,7 @@ def upgrade() -> None:
     sa.CheckConstraint('new_mastery IS NULL OR new_mastery >= 0::numeric AND new_mastery <= 1::numeric', name='chk_new_mastery'),
     sa.CheckConstraint('previous_mastery IS NULL OR previous_mastery >= 0::numeric AND previous_mastery <= 1::numeric', name='chk_prev_mastery'),
     sa.ForeignKeyConstraint(['concept_id'], ['concepts.id'], name='mastery_events_concept_id_fkey', ondelete='CASCADE'),
-    sa.ForeignKeyConstraint(['concept_id'], ['concepts.id'], ondelete='CASCADE'),
     sa.ForeignKeyConstraint(['user_id'], ['users.id'], name='mastery_events_user_id_fkey', ondelete='CASCADE'),
-    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id', name='mastery_events_pkey'),
     comment='Audit trail for every mastery_score change. Useful for visualization and debugging.'
     )
@@ -658,9 +617,7 @@ def upgrade() -> None:
     sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
     sa.CheckConstraint('graph_version > 0', name='chk_ucs_graph_version'),
     sa.ForeignKeyConstraint(['concept_id'], ['concepts.id'], name='user_concept_state_concept_id_fkey', ondelete='CASCADE'),
-    sa.ForeignKeyConstraint(['concept_id'], ['concepts.id'], ondelete='CASCADE'),
     sa.ForeignKeyConstraint(['user_id'], ['users.id'], name='user_concept_state_user_id_fkey', ondelete='CASCADE'),
-    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id', name='user_concept_state_pkey'),
     sa.UniqueConstraint('user_id', 'concept_id', 'graph_version', name='uq_user_concept_state'),
     comment='DAG overlay per user: LOCKED|AVAILABLE|IN_PROGRESS|MASTERED|DUE. Drives graph reveal UI.'
@@ -684,11 +641,8 @@ def upgrade() -> None:
     sa.CheckConstraint('confidence_level IS NULL OR confidence_level >= 1 AND confidence_level <= 5', name='chk_confidence_response'),
     sa.CheckConstraint('response_time_seconds IS NULL OR response_time_seconds >= 0', name='chk_response_time'),
     sa.ForeignKeyConstraint(['assessment_id'], ['assessments.id'], name='assessment_responses_assessment_id_fkey', ondelete='CASCADE'),
-    sa.ForeignKeyConstraint(['assessment_id'], ['assessments.id'], ondelete='CASCADE'),
     sa.ForeignKeyConstraint(['concept_id'], ['concepts.id'], name='assessment_responses_concept_id_fkey', ondelete='CASCADE'),
-    sa.ForeignKeyConstraint(['concept_id'], ['concepts.id'], ondelete='CASCADE'),
     sa.ForeignKeyConstraint(['question_id'], ['generated_questions.id'], name='assessment_responses_question_id_fkey', ondelete='CASCADE'),
-    sa.ForeignKeyConstraint(['question_id'], ['generated_questions.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id', name='assessment_responses_pkey'),
     comment='Per-question responses. confidence_level before reveal = calibration signal.'
     )
@@ -707,11 +661,8 @@ def upgrade() -> None:
     sa.Column('llm_version', sa.String(length=50), nullable=True),
     sa.Column('evaluated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
     sa.ForeignKeyConstraint(['graph_version_id'], ['graph_versions.id'], name='evaluated_pairs_graph_version_id_fkey', ondelete='CASCADE'),
-    sa.ForeignKeyConstraint(['graph_version_id'], ['graph_versions.id'], ondelete='CASCADE'),
     sa.ForeignKeyConstraint(['source_concept_id'], ['concepts.id'], name='evaluated_pairs_source_concept_id_fkey', ondelete='CASCADE'),
-    sa.ForeignKeyConstraint(['source_concept_id'], ['concepts.id'], ondelete='CASCADE'),
     sa.ForeignKeyConstraint(['target_concept_id'], ['concepts.id'], name='evaluated_pairs_target_concept_id_fkey', ondelete='CASCADE'),
-    sa.ForeignKeyConstraint(['target_concept_id'], ['concepts.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id', name='evaluated_pairs_pkey'),
     sa.UniqueConstraint('graph_version_id', 'source_concept_id', 'target_concept_id', name='uq_evaluated_pairs_version_src_tgt')
     )
@@ -739,7 +690,6 @@ def upgrade() -> None:
     sa.Column('before_value', postgresql.JSONB(astext_type=sa.Text()), nullable=True),
     sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
     sa.ForeignKeyConstraint(['graph_version_id'], ['graph_versions.id'], name='graph_repair_log_graph_version_id_fkey', ondelete='CASCADE'),
-    sa.ForeignKeyConstraint(['graph_version_id'], ['graph_versions.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id', name='graph_repair_log_pkey')
     )
     op.create_table('graph_validation_results',
@@ -778,7 +728,6 @@ def upgrade() -> None:
     sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
     sa.ForeignKeyConstraint(['canonical_concept_id'], ['concepts.id'], ondelete='SET NULL'),
     sa.ForeignKeyConstraint(['graph_version_id'], ['graph_versions.id'], name='raw_concepts_graph_version_id_fkey', ondelete='CASCADE'),
-    sa.ForeignKeyConstraint(['graph_version_id'], ['graph_versions.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id', name='raw_concepts_pkey')
     )
     op.create_index('ix_raw_concepts_chunk', 'raw_concepts', ['source_chunk_id'], unique=False)
@@ -793,11 +742,8 @@ def upgrade() -> None:
     sa.Column('processed_at', sa.DateTime(timezone=True), nullable=True),
     sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
     sa.ForeignKeyConstraint(['graph_version_id'], ['graph_versions.id'], name='relationship_candidates_graph_version_id_fkey', ondelete='CASCADE'),
-    sa.ForeignKeyConstraint(['graph_version_id'], ['graph_versions.id'], ondelete='CASCADE'),
     sa.ForeignKeyConstraint(['source_concept_id'], ['concepts.id'], name='relationship_candidates_source_concept_id_fkey', ondelete='CASCADE'),
-    sa.ForeignKeyConstraint(['source_concept_id'], ['concepts.id'], ondelete='CASCADE'),
     sa.ForeignKeyConstraint(['target_concept_id'], ['concepts.id'], name='relationship_candidates_target_concept_id_fkey', ondelete='CASCADE'),
-    sa.ForeignKeyConstraint(['target_concept_id'], ['concepts.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id', name='relationship_candidates_pkey')
     )
     op.create_index('ix_rel_candidates_version_status', 'relationship_candidates', ['graph_version_id', 'status'], unique=False)
@@ -820,9 +766,7 @@ def upgrade() -> None:
     sa.CheckConstraint('token_output_count IS NULL OR token_output_count >= 0', name='chk_output_tokens'),
     sa.CheckConstraint('turn_index >= 0', name='chk_turn_index'),
     sa.ForeignKeyConstraint(['lesson_session_id'], ['lesson_sessions.id'], name='tutor_interactions_lesson_session_id_fkey', ondelete='CASCADE'),
-    sa.ForeignKeyConstraint(['lesson_session_id'], ['lesson_sessions.id'], ondelete='CASCADE'),
     sa.ForeignKeyConstraint(['question_id'], ['generated_questions.id'], name='tutor_interactions_question_id_fkey', ondelete='SET NULL'),
-    sa.ForeignKeyConstraint(['question_id'], ['generated_questions.id'], ondelete='SET NULL'),
     sa.PrimaryKeyConstraint('id', name='tutor_interactions_pkey'),
     sa.UniqueConstraint('lesson_session_id', 'turn_index', name='uq_session_turn'),
     comment='Immutable turn-by-turn Socratic conversation log with turn_index ordering.'
@@ -842,13 +786,9 @@ def upgrade() -> None:
     sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
     sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
     sa.ForeignKeyConstraint(['book_id'], ['books.id'], name='user_books_book_id_fkey', ondelete='CASCADE'),
-    sa.ForeignKeyConstraint(['book_id'], ['books.id'], ondelete='CASCADE'),
-    sa.ForeignKeyConstraint(['current_chapter_id'], ['chapters.id'], ),
     sa.ForeignKeyConstraint(['current_chapter_id'], ['chapters.id'], name='user_books_current_chapter_id_fkey', ondelete='SET NULL'),
     sa.ForeignKeyConstraint(['pinned_graph_version_id'], ['graph_versions.id'], name='user_books_pinned_graph_version_id_fkey', ondelete='RESTRICT'),
-    sa.ForeignKeyConstraint(['pinned_graph_version_id'], ['graph_versions.id'], ondelete='RESTRICT'),
     sa.ForeignKeyConstraint(['user_id'], ['users.id'], name='user_books_user_id_fkey', ondelete='CASCADE'),
-    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id', name='user_books_pkey'),
     sa.UniqueConstraint('user_id', 'book_id', name='uq_user_book'),
     comment='User enrollment in a book. Pins graph version at enrollment time.'
